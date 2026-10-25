@@ -1,17 +1,58 @@
 {
   "name": "aura-audio",
-  "version": "1.0.0",
-  "description": "Ultra-Premium Hi-Res FLAC & Lossless Audiophile Player",
+  "version": "2.0.0",
+  "description": "Aura 2.0 — Ultra-Premium Lossless Audiophile Player",
   "main": "src/main/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --dir",
+    "build": "electron-builder --win"
   },
-  "keywords": ["flac", "audiophile", "dac", "hi-res", "lossless", "audio-player"],
+  "keywords": [
+    "flac",
+    "audiophile",
+    "dac",
+    "hi-res",
+    "lossless",
+    "audio-player"
+  ],
   "author": "Aura Studio",
   "license": "MIT",
   "dependencies": {
-    "electron": "^45.0.0",
     "lucide": "^1.61.0",
     "music-metadata": "^12.3.0"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.aura.audio2",
+    "productName": "Aura 2.0",
+    "copyright": "Copyright © 2026 Aura Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "BackDrop/**/*",
+      "DefaultCover/**/*",
+      "demo_lossless/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aura 2.0"
+    }
   }
 }
