@@ -35,6 +35,13 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 ---
 
 ### 3. Audio Streaming Architecture & Library Scanner
+- **Advanced Audiophile Search Engine & Fuzzy Finder**:
+  - **Tokenized Multi-Field Querying**: Order-independent search matching simultaneously across Song Title, Artist, Album, Container Format, Bit Depth, Sample Rate, and File/Folder Path.
+  - **Typo-Tolerant Fuzzy Matching**: Dynamic bounded Levenshtein distance matching for search tokens $\ge 3$ characters, forgiving accidental misspellings (e.g., `pink flyod`, `beethovn`, `calfornia`).
+  - **Multi-Tiered Relevance Ranking**: Weighted scoring prioritizes exact Title matches (+120 pts), Title prefix (+85 pts), Word boundaries (+70 pts), Artist/Album (+80/+65 pts), and Tech specs (+35 pts) over fuzzy approximations.
+  - **Natural Audiophile Qualifiers**: Direct support for query qualifiers including `hires` / `hi-res` ($>48\text{ kHz}$ or $>16\text{ bit}$), `24bit`, `16bit`, `96k`, `192k`, `format:flac`, `artist:<name>`, and `album:<name>`.
+  - **Visual Match Highlighting**: Safely highlights matched tokens with warm metallic gold accents (`<mark class="search-highlight">`) across Title, Artist, and Album cells.
+  - **Apple Glass UI & Global Shortcuts**: Sleek frosted glass search bar above the track table with live results counter chip, clear button (`×`), and global hotkeys (`Ctrl + F` or `/` to focus, `Escape` to clear).
 - **Local HTTP Byte-Range Audio Streaming Engine**: Embedded zero-overhead HTTP audio server on `127.0.0.1` providing continuous chunked byte-range (`206 Partial Content`) and lossless FLAC playback with zero stalls or CORS issues.
 - **Recursive Drive & Profile Scanner**: Auto-indexes user profiles and custom directories (`C:\Users\<user>\FLAC_files`, `C:\Users\<user>\Music`, and external drives).
 - **Persistent Directory Library**: Automatically saves and re-indexes all imported folders across launches.
@@ -56,6 +63,12 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 ## 📝 Changelog & Evolution
 
 ### Version 1.5.0 (Master Edition & Audio Engine Upgrade)
+- **Advanced Audiophile Search Engine & Fuzzy Finder**:
+  - Implemented tokenized, multi-field search engine across song titles, artists, albums, resolutions, formats, and file paths with order independence.
+  - Added bounded Levenshtein typo-tolerance for misspelled artist or track names (e.g. `pink flyod`, `beethovn`, `calfornia`).
+  - Added weighted relevance scoring (exact > prefix > word boundary > substring > tech specs > fuzzy).
+  - Integrated natural qualifiers (`hires`, `24bit`, `16bit`, `192k`, `format:flac`, `artist:name`, `album:name`).
+  - Added Cupertino frosted glass search console with live counter chip, clear button (`×`), match highlighting (`<mark class="search-highlight">`), and global hotkeys (`/` or `Ctrl + F` to focus, `Escape` to clear).
 - **DAC Deduction UI Soft-Disable (Code Preserved)**:
   - Hidden DAC interrogation status indicators, real-time interrogator sidebar card, and hardware endpoints list from the front-end user interface for cleaner, distraction-free playback.
   - All native WMI interrogation scripts (`detectAudioHardware()`), PowerShell routines, Electron IPC bridges, and `HighResAudioEngine` DAC guard states remain **100% intact in code** for seamless future re-enablement or native driver hooks.

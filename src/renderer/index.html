@@ -125,6 +125,36 @@
           </div>
         </div>
 
+        <!-- Library Search Bar -->
+        <div class="library-search-bar" id="library-search-bar">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input 
+              type="text" 
+              id="library-search-input" 
+              class="library-search-input" 
+              placeholder="Search songs, artists, albums, resolutions (e.g. 'eagles 192k', 'beethoven', '24-bit', 'hires')..." 
+              autocomplete="off" 
+              spellcheck="false"
+            />
+            <button class="search-clear-btn" id="search-clear-btn" title="Clear search (Esc)" style="display: none;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <div class="search-shortcut-hint" id="search-shortcut-hint" title="Press / or Ctrl+F to search">
+              <kbd>/</kbd>
+            </div>
+          </div>
+          <div class="search-meta">
+            <span class="spec-chip" id="search-results-chip" style="display: none; font-size: 11px; padding: 4px 10px;">0 results</span>
+          </div>
+        </div>
+
         <!-- Track Table -->
         <div class="track-table-container">
           <table class="track-table">

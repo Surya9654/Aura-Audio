@@ -1,5 +1,6 @@
 import { HighResAudioEngine, CROSSFEED_PROFILES } from './audio-engine.js';
 import { HEADPHONE_PRESETS, EQ_FREQUENCIES } from './presets.js';
+import { searchTracks, highlightMatches } from './search.js';
 
 // Default Application Master Cover
 export const DEFAULT_APP_COVER = '../../DefaultCover/Gemini_Generated_Image_3vnl5n3vnl5n3vnl.png';
@@ -50,13 +51,16 @@ const state = {
   tracks: [],
   filteredTracks: [],
   currentTrackIndex: -1,
+  currentTrack: null,
   activePreset: HEADPHONE_PRESETS[0],
   activeThemeId: localStorage.getItem('aura.masterTheme') || 'gold',
   isBitPerfect: false,
   dacGuardEnabled: true,
   detectedDACs: [],
   activeHardwareDevice: null,
-  currentFilter: 'ALL'
+  currentFilter: 'ALL',
+  searchQuery: '',
+  activeSearchTokens: []
 };
 
 const audioEngine = new HighResAudioEngine();
@@ -160,11 +164,27 @@ function applyTrackFilter() {
     btnAll.classList.toggle('active', state.currentFilter === 'ALL');
   }
 
-  if (state.currentFilter === 'FLAC') {
-    state.filteredTracks = state.tracks.filter(t => (t.format && t.format.toUpperCase() === 'FLAC') || (t.path && t.path.toLowerCase().endsWith('.flac')));
-  } else {
-    state.filteredTracks = [...state.tracks];
+  const { results, queryTokens } = searchTracks(state.tracks, state.searchQuery, state.currentFilter);
+  state.filteredTracks = results;
+  state.activeSearchTokens = queryTokens;
+
+  // Update UI search indicators
+  const clearBtn = document.getElementById('search-clear-btn');
+  const resultsChip = document.getElementById('search-results-chip');
+
+  const hasQuery = !!(state.searchQuery && state.searchQuery.trim());
+  if (clearBtn) clearBtn.style.display = hasQuery ? 'flex' : 'none';
+
+  if (resultsChip) {
+    if (hasQuery) {
+      resultsChip.style.display = 'inline-flex';
+      resultsChip.textContent = `${results.length} found`;
+      resultsChip.classList.toggle('gold', results.length > 0);
+    } else {
+      resultsChip.style.display = 'none';
+    }
   }
+
   renderTrackList();
 }
 
@@ -363,25 +383,51 @@ function renderTrackList() {
   trackTableBody.innerHTML = '';
   
   if (state.filteredTracks.length === 0) {
-    trackTableBody.innerHTML = `
-      <tr>
-        <td colspan="7" style="text-align: center; padding: 48px 0; color: var(--text-muted);">
-          <div style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Your Library is Empty</div>
-          <div>Click "Import Audio Directory" to scan your storage drive for lossless music.</div>
-        </td>
-      </tr>
-    `;
+    if (state.searchQuery && state.searchQuery.trim()) {
+      trackTableBody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 48px 0; color: var(--text-muted);">
+            <div style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">No Tracks Found</div>
+            <div style="font-size: 12.5px; margin-bottom: 14px;">No results matching &ldquo;<span style="color: var(--accent-gold);">${escapeHtml(state.searchQuery)}</span>&rdquo;.</div>
+            <button class="btn-apple" id="btn-empty-clear-search" style="font-size: 11.5px; padding: 5px 14px; margin: 0 auto;">Clear Search</button>
+          </td>
+        </tr>
+      `;
+      const btnClear = document.getElementById('btn-empty-clear-search');
+      if (btnClear) {
+        btnClear.onclick = () => {
+          const input = document.getElementById('library-search-input');
+          if (input) input.value = '';
+          state.searchQuery = '';
+          applyTrackFilter();
+        };
+      }
+    } else {
+      trackTableBody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 48px 0; color: var(--text-muted);">
+            <div style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Your Library is Empty</div>
+            <div>Click "Import Audio Directory" to scan your storage drive for lossless music.</div>
+          </td>
+        </tr>
+      `;
+    }
     return;
   }
 
   state.filteredTracks.forEach((track, index) => {
+    const isPlayingThis = (state.currentTrack && state.currentTrack.path === track.path) || state.currentTrackIndex === index;
     const row = document.createElement('tr');
-    row.className = `track-row enter ${state.currentTrackIndex === index ? 'playing' : ''}`;
+    row.className = `track-row enter ${isPlayingThis ? 'playing' : ''}`;
     row.style.setProperty('--i', Math.min(index, 24));
     
     const formatClass = track.format === 'FLAC' ? 'format-flac' : (track.format === 'WAV' ? 'format-wav' : 'format-other');
     const khz = (track.sampleRate / 1000).toFixed(1);
     const durationFmt = formatDuration(track.duration);
+
+    const titleHtml = highlightMatches(track.title, state.activeSearchTokens);
+    const artistHtml = highlightMatches(track.artist, state.activeSearchTokens);
+    const albumHtml = highlightMatches(track.album || 'Unknown Album', state.activeSearchTokens);
 
     row.innerHTML = `
       <td style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted);">${index + 1}</td>
@@ -389,12 +435,12 @@ function renderTrackList() {
         <div class="td-track-main">
           <img class="track-thumb" src="${getTrackCover(track)}" alt="" onerror="this.src='${DEFAULT_APP_COVER}'" />
           <div class="track-info-cell">
-            <span class="track-info-title">${escapeHtml(track.title)}</span>
-            <span class="track-info-artist">${escapeHtml(track.artist)}</span>
+            <span class="track-info-title">${titleHtml}</span>
+            <span class="track-info-artist">${artistHtml}</span>
           </div>
         </div>
       </td>
-      <td>${escapeHtml(track.album || 'Unknown Album')}</td>
+      <td>${albumHtml}</td>
       <td>
         <span class="format-pill ${formatClass}">${track.format}</span>
         <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-left: 6px; color: var(--text-gold);">${track.bitsPerSample || 16}-bit</span>
@@ -428,7 +474,7 @@ function renderTrackList() {
 // Live explanation of how the current song reaches the output
 function updateSignalPath() {
   const set = (id, v) => { const el = document.getElementById(id); if (el && el.textContent !== v) el.textContent = v; };
-  const track = state.filteredTracks[state.currentTrackIndex];
+  const track = state.filteredTracks[state.currentTrackIndex] || state.currentTrack;
   const preamp = audioEngine.preampDb || 0;
   const bypass = state.isBitPerfect;
   const presetName = state.activePreset ? state.activePreset.name : 'Reference';
@@ -473,6 +519,7 @@ async function playTrackIndex(index) {
   if (index < 0 || index >= state.filteredTracks.length) return;
   state.currentTrackIndex = index;
   const track = state.filteredTracks[index];
+  state.currentTrack = track;
 
   // (DAC safeguard messaging is shown in the Signal Path panel)
   if (!audioEngine.dacDetected && state.dacGuardEnabled && (track.sampleRate > 48000 || track.bitsPerSample > 16)) {
@@ -499,7 +546,11 @@ async function playTrackIndex(index) {
   }
 
   // Update the highlighted row in place (no full re-render, no flicker)
-  trackTableBody.querySelectorAll('.track-row').forEach((r, i) => r.classList.toggle('playing', i === index));
+  trackTableBody.querySelectorAll('.track-row').forEach((r, i) => {
+    const rowTrack = state.filteredTracks[i];
+    const isPlayingThis = (rowTrack && state.currentTrack && rowTrack.path === state.currentTrack.path) || i === index;
+    r.classList.toggle('playing', isPlayingThis);
+  });
   updateSignalPath();
   const isFsOpen = fsPlayer && fsPlayer.classList.contains('open');
   refreshFullscreen(isFsOpen);
@@ -1550,12 +1601,69 @@ function initThemePersonalisation() {
   applyTheme(state.activeThemeId, false);
 }
 
+// 14. Audiophile Library Advanced Search Controller
+function initLibrarySearch() {
+  const searchInput = document.getElementById('library-search-input');
+  const clearBtn = document.getElementById('search-clear-btn');
+
+  if (searchInput) {
+    let debounceTimer = null;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        state.searchQuery = e.target.value;
+        applyTrackFilter();
+      }, 30);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        state.searchQuery = '';
+        applyTrackFilter();
+        searchInput.blur();
+      }
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+      }
+      state.searchQuery = '';
+      applyTrackFilter();
+    });
+  }
+
+  // Global Keyboard Shortcuts: '/' or 'Ctrl+F' to jump to search
+  window.addEventListener('keydown', (e) => {
+    const activeEl = document.activeElement;
+    const isInputActive = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+
+    if ((e.key === '/' && !isInputActive) || ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F'))) {
+      e.preventDefault();
+      // Ensure Library view is active
+      const libraryNav = document.querySelector('.nav-item[data-view="library"]');
+      if (libraryNav && !libraryNav.classList.contains('active')) {
+        libraryNav.click();
+      }
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  });
+}
+
 async function bootDspExtras() {
   initThemePersonalisation();
   await initExclusiveMode(); // must run before the AudioContext is created
   initCrossfeedUI();
   initNoiseGateAndFilterUI();
   initLockscreenWidgetUI();
+  initLibrarySearch();
 }
 bootDspExtras();
 
