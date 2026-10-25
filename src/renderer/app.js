@@ -112,6 +112,12 @@ const preampSlider = document.getElementById('preamp-slider');
 const preampVal = document.getElementById('preamp-val');
 const visualizerCanvas = document.getElementById('visualizer-canvas');
 
+// Fullscreen Now Playing Elements
+const fsPlayer = document.getElementById('fs-player');
+const fsDetails = document.getElementById('fs-details');
+const fsScrubber = document.getElementById('fs-scrubber');
+let fsScrubbing = false;
+
 // 1. Navigation Controller
 const navFormatsSection = document.getElementById('nav-section-formats');
 
@@ -1346,11 +1352,6 @@ audioEngine.onError = (err) => {
 };
 
 // 9. Fullscreen Now Playing (glass controls + matte details tile)
-const fsPlayer = document.getElementById('fs-player');
-const fsDetails = document.getElementById('fs-details');
-const fsScrubber = document.getElementById('fs-scrubber');
-let fsScrubbing = false;
-
 function currentTrack() { return state.filteredTracks[state.currentTrackIndex]; }
 
 function refreshFullscreen(animateGrid = false) {

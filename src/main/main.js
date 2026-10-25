@@ -134,11 +134,27 @@ function createWindow() {
     show: false
   });
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const src = sourceId ? path.basename(sourceId) : 'renderer';
+    console.log(`[Renderer ${src}:${line}] ${message}`);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error(`[Load Error] ${errorDescription} (${errorCode})`);
+  });
+
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+
+  // Safety fallback in case ready-to-show does not fire
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 800);
 }
 
 // Windows native sound & DAC detection via PowerShell Get-PnpDevice / WMI AudioEndpoint
