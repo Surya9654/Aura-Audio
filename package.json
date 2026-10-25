@@ -1,0 +1,17 @@
+{
+  "name": "aura-audio",
+  "version": "1.0.0",
+  "description": "Ultra-Premium Hi-Res FLAC & Lossless Audiophile Player",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": ["flac", "audiophile", "dac", "hi-res", "lossless", "audio-player"],
+  "author": "Aura Studio",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^45.0.0",
+    "lucide": "^1.61.0",
+    "music-metadata": "^12.3.0"
+  }
+}

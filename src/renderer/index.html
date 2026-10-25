@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aura — Audiophile FLAC Studio</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="polish.css">
+  <link rel="stylesheet" href="fullscreen.css">
+</head>
+<body>
+  <!-- Apple-grade Glass Titlebar -->
+  <header class="titlebar">
+    <div class="titlebar-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-gold); transition: color 0.35s ease;">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+      <span>AURA AUDIO</span>
+      <span class="titlebar-badge">Master Edition</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <!-- Master Edition Theme Quick Swatch Pill -->
+      <div class="titlebar-theme-pill" id="titlebar-theme-pill" title="Master Edition Theme: Click to change accent color">
+        <span class="theme-indicator-swatch" id="theme-indicator-dot"></span>
+        <span id="theme-pill-label">Master Gold</span>
+      </div>
+
+      <!-- Hidden Hardware / DAC Indicator Pill (Code preserved for future re-enablement) -->
+      <div class="titlebar-dac-indicator" id="dac-status-pill" style="display: none;" title="Click to inspect Output & Hardware Settings">
+        <span class="dac-dot" id="dac-indicator-dot"></span>
+        <span id="dac-pill-text">Scanning Audio Hardware...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Ambient Dynamic Studio Lighting Background -->
+  <div class="ambient-glow" id="ambient-glow"></div>
+
+  <!-- Main View Container -->
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="nav-section">
+        <div class="nav-title">Studio</div>
+        <button class="nav-item active" data-view="library">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          <span>Music Library</span>
+        </button>
+        <button class="nav-item" data-view="studio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+          <span>DSP & Acoustic Presets</span>
+        </button>
+        <button class="nav-item" data-view="dac">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          <span>Output &amp; Master Settings</span>
+        </button>
+      </div>
+
+      <div class="nav-section" id="nav-section-formats">
+        <div class="nav-title">Audio Formats</div>
+        <button class="nav-item" id="filter-flac">
+          <span style="color: #2ee677; font-weight: 700; font-size: 11px;">FLAC</span>
+          <span>Lossless Tracks</span>
+        </button>
+        <button class="nav-item" id="filter-all">
+          <span style="color: var(--accent-cyan); font-weight: 700; font-size: 11px;">ALL</span>
+          <span>All Audio Formats</span>
+        </button>
+      </div>
+
+      <!-- Hidden DAC Real-Time Card (Code preserved for future re-enablement) -->
+      <div class="dac-monitor-card" id="dac-sidebar-card" style="display: none;">
+        <div class="dac-card-header">
+          <span class="dac-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            DAC Interrogator
+          </span>
+          <span class="dac-card-badge dac-disconnected" id="dac-sidebar-status">Standard Audio</span>
+        </div>
+        <div class="dac-card-name" id="dac-sidebar-name">Detecting Sound Hardware...</div>
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.3;" id="dac-sidebar-desc">
+          Safe output guard active. Hi-res tracks are optimized to protect against kernel truncation.
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Dynamic Views -->
+    <main class="main-view">
+      <!-- 1. Music Library View -->
+      <section class="view-panel active" id="view-library">
+        <div class="view-header">
+          <div class="view-title-group">
+            <h1>Audiophile Library</h1>
+            <p id="library-count-text">Import your lossless FLAC library or local storage drive.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-apple" id="btn-scan-system-music">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span>Scan Music Folder</span>
+            </button>
+            <button class="btn-apple btn-apple-primary" id="btn-select-custom-folder">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Import Audio Directory</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Audiophile Quality Banner -->
+        <div class="audiophile-banner">
+          <div class="banner-left">
+            <div class="gold-badge-large">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            </div>
+            <div class="banner-info">
+              <h3>Direct Hi-Res Audio Pipeline</h3>
+              <p>Supports native 24-bit/32-bit FLAC up to 384kHz with bit-perfect passthrough & DAC safety synchronization.</p>
+            </div>
+          </div>
+          <div class="banner-badges">
+            <div class="spec-chip gold" id="banner-format-tag">FLAC 24-BIT READY</div>
+            <!-- Hidden DAC Guard Spec Chip (Code preserved for future re-enablement) -->
+            <div class="spec-chip" id="banner-dac-tag" style="display: none;">DAC GUARD: ARMED</div>
+          </div>
+        </div>
+
+        <!-- Track Table -->
+        <div class="track-table-container">
+          <table class="track-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Track Title</th>
+                <th>Album</th>
+                <th>Format & Fidelity</th>
+                <th>Sample Rate</th>
+                <th>Duration</th>
+                <th style="width: 40px;"></th>
+              </tr>
+            </thead>
+            <tbody id="track-table-body">
+              <!-- Dynamically populated or filled with sample state -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 2. Studio / Acoustic Presets View -->
+      <section class="view-panel" id="view-studio">
+        <div class="view-header">
+          <div class="view-title-group">
+            <h1>DSP Acoustic Studio</h1>
+            <p>Target equalization & compensation curves calibrated for leading Headsets, Earphones, and IEMs.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-apple" id="btn-reset-eq">Flat Curve</button>
+            <button class="btn-apple btn-apple-primary" id="btn-toggle-bitperfect">Pure Mode: OFF</button>
+          </div>
+        </div>
+
+        <div class="studio-grid">
+          <!-- Presets column -->
+          <div class="presets-card" id="presets-list-container">
+            <!-- Dynamically populated from presets.js -->
+          </div>
+
+          <!-- 10-Band EQ Controls and Live Spectrum Visualizer -->
+          <div class="eq-console">
+            <div class="eq-console-header">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: #fff;">10-Band Precision Equalizer</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Fine-tune resonance peaks and harmonic staging across full audible spectrum.</p>
+              </div>
+              <div class="spec-chip gold" id="active-preset-badge">Audiophile Reference</div>
+            </div>
+
+            <!-- Vertical Sliders -->
+            <div class="eq-controls-strip" id="eq-sliders-strip">
+              <!-- Dynamically injected sliders for 32Hz, 64Hz ... 16kHz -->
+            </div>
+
+            <!-- Spectrum Analyzer Canvas -->
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Real-Time Audio Spectrum</span>
+                <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--accent-cyan);" id="spectrum-fps">60 FPS • Lossless FFT</span>
+              </div>
+              <div class="visualizer-container">
+                <canvas id="visualizer-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="studio-grid dsp-panels">
+          <!-- Headphone Crossfeed (aligned under presets column) -->
+          <div class="signal-path dsp-panel" id="crossfeed-panel">
+            <h3>Headphone Crossfeed</h3>
+            <p class="dsp-panel-desc">Blends a low-passed, slightly delayed fraction of each channel into the opposite ear to move the soundstage out of your head, like listening to speakers.</p>
+            <div class="dsp-row">
+              <span class="dsp-label">Enable Crossfeed</span>
+              <label class="switch">
+                <input type="checkbox" id="toggle-crossfeed">
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+            <div class="dsp-row">
+              <span class="dsp-label">Algorithm</span>
+              <select id="crossfeed-profile" class="dsp-select"></select>
+            </div>
+            <div class="dsp-row">
+              <span class="dsp-label">Amount</span>
+              <div class="dsp-slider-group">
+                <input type="range" id="crossfeed-amount" min="0" max="100" step="5" value="100">
+                <span class="dsp-value" id="crossfeed-amount-val">100%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- 3. DAC & Hardware Config View -->
+      <section class="view-panel" id="view-dac">
+        <div class="view-header">
+          <div class="view-title-group">
+            <h1>Output &amp; Master Settings</h1>
+            <p>Configure hardware output, 32-bit float engine, exclusive mode, and Master Edition personalisation.</p>
+          </div>
+          <!-- Hidden DAC Interrogation Button (Code preserved for future re-enablement) -->
+          <button class="btn-apple btn-apple-primary" id="btn-rescan-hardware" style="display: none;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            <span>Interrogate Audio Hardware</span>
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Live signal path -->
+          <div class="signal-path">
+            <h3>Signal Path — Now Playing</h3>
+            <div class="signal-stages">
+              <div class="signal-stage">
+                <div class="stage-label">Source</div>
+                <div class="stage-main" id="sp-source">No track playing</div>
+                <div class="stage-sub" id="sp-source-sub">—</div>
+              </div>
+              <div class="signal-arrow">›</div>
+              <div class="signal-stage">
+                <div class="stage-label">Processing</div>
+                <div class="stage-main" id="sp-dsp">Reference (flat)</div>
+                <div class="stage-sub" id="sp-dsp-sub">Preamp 0.0 dB</div>
+              </div>
+              <div class="signal-arrow">›</div>
+              <div class="signal-stage">
+                <div class="stage-label">Output</div>
+                <div class="stage-main" id="sp-output">System audio</div>
+                <div class="stage-sub" id="sp-output-sub">—</div>
+              </div>
+            </div>
+            <div class="signal-note" id="sp-note">Play a track to see exactly how it reaches your ears.</div>
+          </div>
+
+          <!-- Theme Personalisation: Master Edition Accent -->
+          <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 14px; padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div>
+                <div class="setting-title" style="display: flex; align-items: center; gap: 10px;">
+                  <span>Master Edition Personalisation</span>
+                  <span class="spec-chip gold" id="theme-active-badge">Master Gold</span>
+                </div>
+                <div class="setting-desc">Personalise your Master Edition accent hue while preserving the pure bit-perfect acoustic engine.</div>
+              </div>
+            </div>
+            <div class="theme-swatch-grid" id="theme-swatch-grid">
+              <!-- Rendered dynamically: Gold, Blood Red, Spotify Green, Liquid Platinum -->
+            </div>
+          </div>
+
+          <!-- Hidden DAC Safeguard Setting (Code preserved for future re-enablement) -->
+          <div class="setting-row" id="dac-guard-row" style="display: none;">
+            <div>
+              <div class="setting-title">DAC Safeguard</div>
+              <div class="setting-desc">When no external DAC is detected, hi-res files (above 48 kHz or 16-bit) are flagged in the Signal Path as being resampled by the system mixer, so you always know what you are really hearing.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-dac-guard" checked>
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+
+          <!-- Bit Perfect Direct Mode -->
+          <div class="setting-row">
+            <div>
+              <div class="setting-title">Pure Mode (DSP Bypass)</div>
+              <div class="setting-desc">Routes the decoded stream straight to the output, skipping the equalizer and preamp. Your EQ settings are kept and return when you switch it off. Best with an external DAC.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-bit-perfect-switch">
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+
+          <!-- Exclusive Mode / Low-latency output -->
+          <div class="setting-row">
+            <div>
+              <div class="setting-title">Exclusive Mode (WASAPI, Windows)</div>
+              <div class="setting-desc">Asks Windows for exclusive, low-latency access to the output device so the shared mixer's resampling and volume curve are bypassed. Audio is processed internally as 32-bit float. Best effort: if the device rejects the stream format, Windows falls back to shared mode. Requires a restart.</div>
+              <div class="setting-desc" id="exclusive-status" style="color: var(--accent-cyan);"></div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-exclusive-mode">
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <div>
+              <div class="setting-title">Use Device Volume</div>
+              <div class="setting-desc">Locks the in-app volume at 100% (no digital attenuation) so loudness is controlled by your device / system / DAC volume. Preserves full bit depth.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-device-volume">
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+
+          <!-- Subsonic & DC Rumble Filter (20Hz High-Pass) -->
+          <div class="setting-row">
+            <div>
+              <div class="setting-title" style="display: flex; align-items: center; gap: 8px;">
+                <span>Subsonic &amp; DC Rumble Filter</span>
+                <span class="spec-chip gold" style="font-size: 10px; padding: 2px 7px;">20Hz High-Pass</span>
+              </div>
+              <div class="setting-desc">Steep 4th-order (-24 dB/oct) high-pass filter at 20 Hz. Eliminates 0 Hz DC offset, motherboard electrical ripple, and turntable rumble while leaving musical sub-bass pristine.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-dc-filter" checked>
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+
+          <!-- Black-Background Noise Gate / Expander -->
+          <div class="setting-row">
+            <div>
+              <div class="setting-title" style="display: flex; align-items: center; gap: 8px;">
+                <span>Black-Background Noise Gate</span>
+                <span class="spec-chip gold" id="gate-active-chip" style="font-size: 10px; padding: 2px 7px;">-65 dBFS</span>
+              </div>
+              <div class="setting-desc">Real-time downward expander that drops output to true digital zero (-∞ dB) during pauses, track gaps, and quiet moments. Cuts out continuous motherboard amp hiss and static.</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <select id="select-gate-threshold" class="dsp-select" style="max-width: 145px; font-size: 11.5px; padding: 6px 10px;">
+                <option value="-75">Subtle (-75 dB)</option>
+                <option value="-65" selected>Balanced (-65 dB)</option>
+                <option value="-55">Aggressive (-55 dB)</option>
+              </select>
+              <label class="switch">
+                <input type="checkbox" id="toggle-noise-gate" checked>
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Lock screen / system media controls -->
+          <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 14px; padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div>
+                <div class="setting-title" style="display: flex; align-items: center; gap: 10px;">
+                  <span>Lock Screen &amp; System Media Widget</span>
+                  <span class="spec-chip gold" id="ls-status-tag">Active</span>
+                </div>
+                <div class="setting-desc">Compact lockscreen widget styled after the Full Screen player with glass scrubber and playback controls, designed to sit cleanly alongside other widgets.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="btn-apple" id="btn-toggle-floating-widget" style="padding: 5px 12px; font-size: 11.5px;" title="Pop open floating mini lockscreen widget">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+                  <span>Floating Widget</span>
+                </button>
+                <label class="switch">
+                  <input type="checkbox" id="toggle-media-widget" checked>
+                  <span class="slider-switch"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="lockscreen-widget-wrapper">
+              <div class="lockscreen-widget" id="lockscreen-widget">
+                <div class="ls-backdrop" id="ls-backdrop"></div>
+                <div class="ls-scrim"></div>
+                <div class="ls-content">
+                  <div class="ls-top-row">
+                    <div class="ls-art" id="ls-art">
+                      <img id="ls-art-img" src="../../DefaultCover/Gemini_Generated_Image_3vnl5n3vnl5n3vnl.png" alt="" />
+                    </div>
+                    <div class="ls-meta">
+                      <div class="ls-title" id="ls-title">Select a Track to Play</div>
+                      <div class="ls-artist" id="ls-artist">Aura Hi-Res Engine Ready</div>
+                      <span class="ls-tag" id="ls-tag">FLAC • 24-BIT • 96.0 kHz</span>
+                    </div>
+                  </div>
+                  <div class="ls-glass-panel">
+                    <div class="ls-scrub-row">
+                      <span class="ls-time" id="ls-current">0:00</span>
+                      <input type="range" class="ls-scrubber" id="ls-scrubber" min="0" max="100" step="0.01" value="0">
+                      <span class="ls-time" id="ls-total">0:00</span>
+                    </div>
+                    <div class="ls-controls">
+                      <button class="glass-btn ls-btn" id="ls-prev" title="Previous" aria-label="Previous">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" stroke="currentColor" stroke-width="2.5"></line></svg>
+                      </button>
+                      <button class="glass-btn ls-btn ls-btn-play" id="ls-play" title="Play / Pause" aria-label="Play / Pause">
+                        <svg width="15" height="15" id="ls-play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+                      </button>
+                      <button class="glass-btn ls-btn" id="ls-next" title="Next" aria-label="Next">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"></line></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Preamp / Headroom Compensation -->
+          <div class="setting-row">
+            <div>
+              <div class="setting-title">Headroom Preamp</div>
+              <div class="setting-desc">Set automatically when you pick a preset so boosted bands never clip. You can fine-tune it here.</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-gold);" id="preamp-val">0.0 dB</span>
+              <input type="range" id="preamp-slider" min="-12" max="6" step="0.5" value="0" style="width: 140px; cursor: pointer;">
+            </div>
+          </div>
+
+          <!-- Hidden Detected Audio Hardware Devices List (Code preserved for future re-enablement) -->
+          <div id="hardware-endpoints-card" style="display: none; background: var(--bg-surface); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); padding: 20px;">
+            <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 14px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Detected System Audio Endpoints</h3>
+            <div id="hardware-devices-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Populated dynamically via PowerShell / WMI interrogation -->
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Apple Master Audio Bottom Controller Bar -->
+  <footer class="player-bar">
+    <!-- Left: Now Playing Metadata -->
+    <div class="player-track-info">
+      <div class="now-playing-art" id="player-art-box">
+        <img src="../../DefaultCover/Gemini_Generated_Image_3vnl5n3vnl5n3vnl.png" alt="Aura Master Cover" style="width:100%;height:100%;border-radius:10px;object-fit:cover;" />
+      </div>
+      <div class="now-playing-meta">
+        <div class="now-playing-title" id="player-title">Select a Track to Play</div>
+        <div class="now-playing-artist" id="player-artist">Aura Hi-Res Engine Ready</div>
+        <div class="hi-res-telemetry-tag" id="player-telemetry">FLAC • 24-BIT • 96.0 kHz</div>
+      </div>
+    </div>
+
+    <!-- Center: Playback Controls & Scrubber -->
+    <div class="player-center-controls">
+      <div class="control-buttons-row">
+        <button class="btn-ctrl" id="btn-prev" title="Previous Track">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+        </button>
+        <button class="btn-play-master" id="btn-master-play" title="Play / Pause">
+          <svg width="22" height="22" id="play-pause-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+        </button>
+        <button class="btn-ctrl" id="btn-next" title="Next Track">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+        </button>
+      </div>
+
+      <div class="scrubber-container">
+        <span class="time-stamp" id="current-time">0:00</span>
+        <input type="range" class="scrubber-slider" id="scrubber" min="0" max="100" step="0.01" value="0">
+        <span class="time-stamp" id="total-time">0:00</span>
+      </div>
+    </div>
+
+    <!-- Right: Volume & Quick EQ/DAC status -->
+    <div class="player-right-controls">
+      <button class="btn-ctrl" id="btn-player-mini-widget" title="Toggle Compact Lockscreen Widget" style="padding: 4px; border-radius: 6px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect><rect x="6" y="6" width="6" height="6" rx="1" ry="1"></rect></svg>
+      </button>
+
+      <button class="btn-ctrl" id="btn-quick-preset" title="Active Acoustic Target" style="font-size: 12px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+        <span id="quick-preset-name">Reference</span>
+      </button>
+
+      <div class="volume-slider-group">
+        <button class="btn-ctrl" id="btn-mute" title="Mute / Unmute">
+          <svg width="18" height="18" id="volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        </button>
+        <input type="range" class="volume-slider" id="volume-slider" min="0" max="1" step="0.01" value="0.85">
+      </div>
+    </div>
+  </footer>
+
+  <!-- Fullscreen Now Playing -->
+  <section class="fs-player" id="fs-player" aria-hidden="true">
+    <div class="fs-backdrop" id="fs-backdrop"></div>
+    <div class="fs-scrim"></div>
+
+    <button class="glass-btn glass-btn-sm fs-close" id="fs-close" title="Back to library" aria-label="Back to library">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </button>
+
+    <div class="fs-content">
+      <div class="fs-art" id="fs-art"></div>
+
+      <button class="fs-meta" id="fs-meta" title="Song details">
+        <span class="fs-title" id="fs-title">—</span>
+        <span class="fs-artist" id="fs-artist">—</span>
+        <span class="fs-tag" id="fs-tag">—</span>
+      </button>
+
+      <div class="fs-glass-panel">
+        <div class="fs-scrub-row">
+          <span class="fs-time" id="fs-current">0:00</span>
+          <input type="range" class="fs-scrubber" id="fs-scrubber" min="0" max="100" step="0.01" value="0">
+          <span class="fs-time" id="fs-total">0:00</span>
+        </div>
+        <div class="fs-controls">
+          <button class="glass-btn" id="fs-prev" title="Previous" aria-label="Previous">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+          </button>
+          <button class="glass-btn glass-btn-lg" id="fs-play" title="Play / Pause" aria-label="Play / Pause">
+            <svg width="30" height="30" id="fs-play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+          </button>
+          <button class="glass-btn" id="fs-next" title="Next" aria-label="Next">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Song details: matte tile over blurred background -->
+    <div class="fs-details-overlay" id="fs-details" aria-hidden="true">
+      <div class="fs-details-tile" role="dialog" aria-label="Song details">
+        <button class="fs-details-back" id="fs-details-back" title="Back" aria-label="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <div class="fs-details-head">
+          <div class="fs-details-title" id="fd-title">—</div>
+          <div class="fs-details-artist" id="fd-artist">—</div>
+        </div>
+        <dl class="fs-details-grid" id="fd-grid"></dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- Floating Compact Lockscreen Widget (Can float on screen alongside other widgets) -->
+  <div class="floating-widget-overlay" id="floating-widget-overlay">
+    <div class="floating-widget-bar">
+      <span>Lockscreen Mini Widget</span>
+      <button class="floating-widget-close" id="btn-close-floating-widget" title="Close Floating Widget">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="lockscreen-widget" id="floating-lockscreen-widget">
+      <div class="ls-backdrop" id="fls-backdrop"></div>
+      <div class="ls-scrim"></div>
+      <div class="ls-content">
+        <div class="ls-top-row">
+          <div class="ls-art">
+            <img id="fls-art-img" src="../../DefaultCover/Gemini_Generated_Image_3vnl5n3vnl5n3vnl.png" alt="" />
+          </div>
+          <div class="ls-meta">
+            <div class="ls-title" id="fls-title">Select a Track to Play</div>
+            <div class="ls-artist" id="fls-artist">Aura Hi-Res Engine Ready</div>
+            <span class="ls-tag" id="fls-tag">FLAC • 24-BIT • 96.0 kHz</span>
+          </div>
+        </div>
+        <div class="ls-glass-panel">
+          <div class="ls-scrub-row">
+            <span class="ls-time" id="fls-current">0:00</span>
+            <input type="range" class="ls-scrubber" id="fls-scrubber" min="0" max="100" step="0.01" value="0">
+            <span class="ls-time" id="fls-total">0:00</span>
+          </div>
+          <div class="ls-controls">
+            <button class="glass-btn ls-btn" id="fls-prev" title="Previous" aria-label="Previous">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" stroke="currentColor" stroke-width="2.5"></line></svg>
+            </button>
+            <button class="glass-btn ls-btn ls-btn-play" id="fls-play" title="Play / Pause" aria-label="Play / Pause">
+              <svg width="15" height="15" id="fls-play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+            </button>
+            <button class="glass-btn ls-btn" id="fls-next" title="Next" aria-label="Next">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"></line></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
