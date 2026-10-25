@@ -162,24 +162,47 @@
   gap: 18px;
 }
 
-.fs-scrub-row { display: flex; align-items: center; gap: 14px; }
+.fs-scrub-row { display: flex; align-items: center; gap: 14px; width: 100%; }
 .fs-time { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: rgba(255, 255, 255, 0.75); min-width: 38px; text-align: center; }
+
+.fs-scrub-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 24px;
+}
+.fs-scrub-wrapper .scrubber-heatmap-canvas {
+  height: 8px;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 10px rgba(255, 255, 255, 0.08);
+}
+.fs-scrub-wrapper:hover .scrubber-heatmap-canvas {
+  height: 10px;
+}
 
 /* Glass progress bar */
 .fs-scrubber {
   flex: 1;
+  width: 100%;
   -webkit-appearance: none;
   appearance: none;
-  height: 8px;
+  height: 24px;
   border-radius: 8px;
   outline: none;
   cursor: pointer;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0.85) var(--p, 0%), rgba(255, 255, 255, 0.16) var(--p, 0%));
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 12px rgba(255, 255, 255, 0.08);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  position: relative;
+  z-index: 2;
   transition: height 0.25s var(--ease-out);
 }
-.fs-scrubber:hover { height: 10px; }
+.fs-scrubber:hover { height: 24px; }
+.fs-dr-badge {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
 .fs-scrubber::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;

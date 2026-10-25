@@ -1,12 +1,20 @@
-# Aura Audio — Ultra-Premium Audiophile FLAC Player
+# Aura 2.0 — Ultra-Premium Audiophile Lossless Workstation
 
-**Aura Audio** is an Apple-inspired desktop lossless audio workstation built specifically for FLAC, high-resolution WAV/AIFF, and bit-perfect DAC playback.
+**Aura 2.0** is an Apple-inspired desktop lossless audio workstation built specifically for FLAC, high-resolution WAV/AIFF, and bit-perfect DAC playback.
 
 ---
 
 ## 🌟 Key Features
 
-### 1. 32-Bit Float Processing, WASAPI Exclusive Engine & Output Settings
+### 1. Dynamic Dynamic Range (DR) & Crest Factor Heatmap Scrubber Timeline
+- **Real-Time 60 FPS Crest Factor Analysis**: Measures sample-accurate instantaneous Peak-to-RMS ratios ($20 \log_{10}(\text{Peak} / \text{RMS})$) directly from the 32-bit floating-point Web Audio pipeline.
+- **Visual Micro-Dynamics Heatmap Timeline**: Transforms the seekbar into an uncompressed transient density topography:
+  - **Radiant Warm Gold ($DR \ge 13.0\text{ dB}$)**: Uncompressed acoustic transients, drum rimshots, and orchestral swells glow with an ambient champagne-gold bloom.
+  - **Warm Studio Brass ($8.0 \le DR < 13.0\text{ dB}$)**: Balanced, punchy studio masters.
+  - **Dense Brick-Red Bar ($DR < 8.0\text{ dB}$)**: Instantly reveals brick-walled, heavily compressed "Loudness War" masters where peaks are squashed near the RMS ceiling.
+- **Live Scrubber DR Telemetry Badge**: Displays real-time dynamic range readings (e.g. `DR 14.5 dB` with color-coded status dot) across both the master player bar and Fullscreen view.
+
+### 2. 32-Bit Float Processing, WASAPI Exclusive Engine & Output Settings
 - **32-Bit Floating Point Pipeline**: Internal stream processing in 32-bit float Web Audio buffers, eliminating quantization distortion before output delivery.
 - **Real-Time Black-Background Noise Gate / Expander**: Dynamically monitors the 32-bit audio stream. During silent passages, track pauses, or quiet moments below threshold (-75 dBFS, -65 dBFS, or -55 dBFS), smoothly ramps output gain to absolute digital zero (-∞ dB). Eliminates continuous motherboard analog amplifier hiss, static, and electrical hum, replicating the pitch-black background of high-end external DACs.
 - **Software-Side DC Offset & Subsonic Rumble Filter**: 4th-order (-24 dB/oct) Butterworth high-pass filter at 20 Hz in the 32-bit float pipeline. Eliminates 0 Hz DC bias, power supply electrical ripple (5–18 Hz), and low-frequency rumble that strains headphone amplifiers, without affecting musical sub-bass.
@@ -18,7 +26,7 @@
 
 ---
 
-### 2. Acoustic Target Presets for Popular Headsets, Earphones & IEMs
+### 3. Acoustic Target Presets for Popular Headsets, Earphones & IEMs
 Calibrated acoustic compensation curves designed according to Harman Target 2019 and Diffuse-Field standards:
 - **Apple AirPods Max** *(De-bloats bass resonance, enhances airy treble extension)*
 - **Sony WH-1000XM5 / XM4** *(Tames boomy bass, elevates recessed vocal presence)*
@@ -34,7 +42,7 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 
 ---
 
-### 3. Audio Streaming Architecture & Library Scanner
+### 4. Audio Streaming Architecture & Advanced Search
 - **Advanced Audiophile Search Engine & Fuzzy Finder**:
   - **Tokenized Multi-Field Querying**: Order-independent search matching simultaneously across Song Title, Artist, Album, Container Format, Bit Depth, Sample Rate, and File/Folder Path.
   - **Typo-Tolerant Fuzzy Matching**: Dynamic bounded Levenshtein distance matching for search tokens $\ge 3$ characters, forgiving accidental misspellings (e.g., `pink flyod`, `beethovn`, `calfornia`).
@@ -50,7 +58,7 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 
 ---
 
-### 4. Apple Pro Design System (Navy & Gold Studio Edition)
+### 5. Apple Pro Design System (Navy & Gold Studio Edition)
 - **Palette**: Deep studio navy (`#07090e`, `#12161f`) with warm metallic gold accents (`#e5b95f`, `#f5d485`). All legacy blue and purple tints eliminated.
 - **Ultra-Premium Play/Pause Master Button**: Floating 52px disc with radial champagne gradient, dual gold/white border, and multi-tier ambient halo glow.
 - **Precision Scrubber Progress Bar**: Continuously filled gold seekbar powered by `requestAnimationFrame` for buttery 60 FPS time synchronization.
@@ -62,13 +70,18 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 
 ## 📝 Changelog & Evolution
 
-### Version 1.5.0 (Master Edition & Audio Engine Upgrade)
+### Version 2.0.0 (Aura 2.0 — Dynamics Heatmap & Audiophile Search)
+- **Dynamic Dynamic Range (DR) & Crest Factor Heatmap Timeline**:
+  - Transformed the 60 FPS requestAnimationFrame scrubber into a real-time Crest Factor and micro-dynamics heatmap canvas.
+  - Color-codes the progress bar dynamically: glowing warm gold during dynamic acoustic peaks ($DR \ge 13\text{ dB}$), warm studio brass during balanced passages ($8 \le DR < 13\text{ dB}$), and dense flat brick-red during heavily compressed/limited loudness-war sections ($DR < 8\text{ dB}$).
+  - Added live DR telemetry badge (`DR 14.5 dB • DYNAMIC`) on both the bottom player bar and Fullscreen player.
+  - Implemented `DynamicsHeatmapManager` with 160 timeline bins, deterministic baseline envelopes, and real-time live measurement updates.
 - **Advanced Audiophile Search Engine & Fuzzy Finder**:
-  - Implemented tokenized, multi-field search engine across song titles, artists, albums, resolutions, formats, and file paths with order independence.
-  - Added bounded Levenshtein typo-tolerance for misspelled artist or track names (e.g. `pink flyod`, `beethovn`, `calfornia`).
-  - Added weighted relevance scoring (exact > prefix > word boundary > substring > tech specs > fuzzy).
-  - Integrated natural qualifiers (`hires`, `24bit`, `16bit`, `192k`, `format:flac`, `artist:name`, `album:name`).
-  - Added Cupertino frosted glass search console with live counter chip, clear button (`×`), match highlighting (`<mark class="search-highlight">`), and global hotkeys (`/` or `Ctrl + F` to focus, `Escape` to clear).
+  - Multi-field tokenized query engine with order independence.
+  - Bounded Levenshtein typo-tolerance for misspelled artist or track names.
+  - Weighted relevance ranking with natural qualifiers (`hires`, `24bit`, `format:flac`).
+  - Search highlighting and global shortcuts (`/`, `Ctrl + F`, `Esc`).
+### Version 1.5.0 (Master Edition & Audio Engine Upgrade)
 - **DAC Deduction UI Soft-Disable (Code Preserved)**:
   - Hidden DAC interrogation status indicators, real-time interrogator sidebar card, and hardware endpoints list from the front-end user interface for cleaner, distraction-free playback.
   - All native WMI interrogation scripts (`detectAudioHardware()`), PowerShell routines, Electron IPC bridges, and `HighResAudioEngine` DAC guard states remain **100% intact in code** for seamless future re-enablement or native driver hooks.

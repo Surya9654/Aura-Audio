@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aura — Audiophile FLAC Studio</title>
+  <title>Aura 2.0 — Audiophile Lossless Studio</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="polish.css">
   <link rel="stylesheet" href="fullscreen.css">
@@ -17,7 +17,7 @@
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
       </svg>
       <span>AURA AUDIO</span>
-      <span class="titlebar-badge">Master Edition</span>
+      <span class="titlebar-badge">Aura 2.0</span>
     </div>
 
     <div style="display: flex; align-items: center; gap: 10px;">
@@ -506,8 +506,15 @@
 
       <div class="scrubber-container">
         <span class="time-stamp" id="current-time">0:00</span>
-        <input type="range" class="scrubber-slider" id="scrubber" min="0" max="100" step="0.01" value="0">
+        <div class="scrubber-track-wrapper">
+          <canvas class="scrubber-heatmap-canvas" id="scrubber-heatmap-canvas"></canvas>
+          <input type="range" class="scrubber-slider" id="scrubber" min="0" max="100" step="0.01" value="0">
+        </div>
         <span class="time-stamp" id="total-time">0:00</span>
+        <div class="dr-meter-badge" id="dr-meter-badge" title="Dynamic Range (Crest Factor): Micro-Dynamics & Transient Density">
+          <span class="dr-meter-dot" id="dr-meter-dot"></span>
+          <span class="dr-meter-val" id="dr-meter-val">DR 14 dB</span>
+        </div>
       </div>
     </div>
 
@@ -552,8 +559,15 @@
       <div class="fs-glass-panel">
         <div class="fs-scrub-row">
           <span class="fs-time" id="fs-current">0:00</span>
-          <input type="range" class="fs-scrubber" id="fs-scrubber" min="0" max="100" step="0.01" value="0">
+          <div class="scrubber-track-wrapper fs-scrub-wrapper">
+            <canvas class="scrubber-heatmap-canvas" id="fs-scrubber-heatmap-canvas"></canvas>
+            <input type="range" class="fs-scrubber" id="fs-scrubber" min="0" max="100" step="0.01" value="0">
+          </div>
           <span class="fs-time" id="fs-total">0:00</span>
+          <div class="dr-meter-badge fs-dr-badge" id="fs-dr-meter-badge" title="Dynamic Range (Crest Factor)">
+            <span class="dr-meter-dot" id="fs-dr-meter-dot"></span>
+            <span class="dr-meter-val" id="fs-dr-meter-val">DR 14 dB</span>
+          </div>
         </div>
         <div class="fs-controls">
           <button class="glass-btn" id="fs-prev" title="Previous" aria-label="Previous">

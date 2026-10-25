@@ -499,4 +499,49 @@ export class HighResAudioEngine {
       this.analyserNode.getByteTimeDomainData(array);
     }
   }
+
+  /**
+   * Real-Time Micro-Dynamics & Crest Factor Analysis
+   * Calculates instantaneous Peak, RMS, and Crest Factor (dB) to detect
+   * uncompressed dynamic acoustic peaks vs brick-walled loudness war compression.
+   */
+  getDynamicsMetrics() {
+    if (!this.analyserNode || !this.isPlaying) {
+      return { peak: 0, rms: 0, crestFactorDb: 0, dynamicRating: 'IDLE' };
+    }
+
+    if (!this.dynamicsBuffer) {
+      this.dynamicsBuffer = new Float32Array(this.analyserNode.fftSize || 512);
+    }
+    this.analyserNode.getFloatTimeDomainData(this.dynamicsBuffer);
+
+    let peak = 0;
+    let sumSquares = 0;
+    const len = this.dynamicsBuffer.length;
+
+    for (let i = 0; i < len; i++) {
+      const abs = Math.abs(this.dynamicsBuffer[i]);
+      if (abs > peak) peak = abs;
+      sumSquares += abs * abs;
+    }
+
+    const rms = Math.sqrt(sumSquares / len);
+
+    if (rms < 0.001 || peak < 0.002) {
+      return { peak: 0, rms: 0, crestFactorDb: 0, dynamicRating: 'SILENT' };
+    }
+
+    // Crest Factor: ratio of peak amplitude to RMS
+    const cfRatio = peak / Math.max(rms, 1e-4);
+    const crestFactorDb = Math.min(24, Math.max(0, 20 * Math.log10(cfRatio)));
+
+    let dynamicRating = 'BALANCED';
+    if (crestFactorDb >= 13.0) {
+      dynamicRating = 'DYNAMIC'; // Uncompressed acoustic transients / drum peaks / orchestral swells
+    } else if (crestFactorDb < 8.0) {
+      dynamicRating = 'COMPRESSED'; // Loudness war / brickwalled master
+    }
+
+    return { peak, rms, crestFactorDb, dynamicRating };
+  }
 }

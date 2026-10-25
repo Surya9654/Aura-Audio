@@ -1,9 +1,12 @@
 import { HighResAudioEngine, CROSSFEED_PROFILES } from './audio-engine.js';
 import { HEADPHONE_PRESETS, EQ_FREQUENCIES } from './presets.js';
 import { searchTracks, highlightMatches } from './search.js';
+import { DynamicsHeatmapManager } from './dynamics-heatmap.js';
 
 // Default Application Master Cover
 export const DEFAULT_APP_COVER = '../../DefaultCover/Gemini_Generated_Image_3vnl5n3vnl5n3vnl.png';
+
+const dynamicsHeatmap = new DynamicsHeatmapManager(160);
 
 export function getTrackCover(track) {
   if (track && track.hasCover && track.coverData) return track.coverData;
@@ -520,6 +523,7 @@ async function playTrackIndex(index) {
   state.currentTrackIndex = index;
   const track = state.filteredTracks[index];
   state.currentTrack = track;
+  dynamicsHeatmap.initTrack(track);
 
   // (DAC safeguard messaging is shown in the Signal Path panel)
   if (!audioEngine.dacDetected && state.dacGuardEnabled && (track.sampleRate > 48000 || track.bitsPerSample > 16)) {
@@ -666,17 +670,72 @@ volumeSlider.addEventListener('input', (e) => {
 });
 setVolumeFill();
 
-// Silky progress: drive the scrubber from requestAnimationFrame instead of ~4Hz timeupdate events
+// Silky progress & Dynamic Range Heatmap: drive the scrubber from requestAnimationFrame at 60 FPS
+const scrubberHeatmapCanvas = document.getElementById('scrubber-heatmap-canvas');
+const fsScrubberHeatmapCanvas = document.getElementById('fs-scrubber-heatmap-canvas');
+const drMeterVal = document.getElementById('dr-meter-val');
+const drMeterDot = document.getElementById('dr-meter-dot');
+const drMeterBadge = document.getElementById('dr-meter-badge');
+const fsDrMeterVal = document.getElementById('fs-dr-meter-val');
+const fsDrMeterDot = document.getElementById('fs-dr-meter-dot');
+const fsDrMeterBadge = document.getElementById('fs-dr-meter-badge');
+
 (function progressLoop() {
   const el = audioEngine.audioElement;
-  if (!scrubbing && el && el.duration > 0) {
-    const pct = (el.currentTime / el.duration) * 100;
-    scrubber.value = pct;
-    scrubber.style.setProperty('--p', `${pct}%`);
-    currentTimeEl.textContent = formatDuration(el.currentTime);
-    totalTimeEl.textContent = formatDuration(el.duration);
-    syncLockscreenScrubber(el.currentTime, el.duration);
+  let pct = 0;
+  if (el && el.duration > 0) {
+    pct = (el.currentTime / el.duration) * 100;
+    if (!scrubbing) {
+      scrubber.value = pct;
+      scrubber.style.setProperty('--p', `${pct}%`);
+      currentTimeEl.textContent = formatDuration(el.currentTime);
+      totalTimeEl.textContent = formatDuration(el.duration);
+      syncLockscreenScrubber(el.currentTime, el.duration);
+    }
   }
+
+  // Micro-Dynamics & Crest Factor Heatmap Timeline Processing
+  const metrics = audioEngine.getDynamicsMetrics();
+  dynamicsHeatmap.recordProgress(pct, metrics);
+
+  const activeTheme = MASTER_THEMES.find(t => t.id === state.activeThemeId);
+  const themeAccent = activeTheme ? activeTheme.swatchColor : '#e5b95f';
+
+  if (scrubberHeatmapCanvas) {
+    dynamicsHeatmap.render(scrubberHeatmapCanvas, pct, metrics, themeAccent);
+  }
+
+  const isFsOpen = fsPlayer && fsPlayer.classList.contains('open');
+  if (isFsOpen && fsScrubberHeatmapCanvas) {
+    dynamicsHeatmap.render(fsScrubberHeatmapCanvas, pct, metrics, themeAccent);
+  }
+
+  // Update Dynamic Range Badges (DR XX dB • Dynamic/Compressed)
+  const currentDr = metrics.crestFactorDb > 0 ? metrics.crestFactorDb : dynamicsHeatmap.smoothCrestFactor;
+  const drText = `DR ${currentDr.toFixed(1)} dB`;
+  const rating = metrics.dynamicRating || 'BALANCED';
+
+  const updateBadge = (valEl, dotEl, badgeEl) => {
+    if (!valEl) return;
+    valEl.textContent = drText;
+    if (dotEl) {
+      dotEl.className = `dr-meter-dot ${rating === 'DYNAMIC' ? 'dynamic' : (rating === 'COMPRESSED' ? 'compressed' : 'balanced')}`;
+    }
+    if (badgeEl) {
+      badgeEl.classList.toggle('compressed', rating === 'COMPRESSED');
+      badgeEl.title = rating === 'DYNAMIC'
+        ? `Crest Factor: ${currentDr.toFixed(1)} dB — High uncompressed acoustic dynamic range & punchy transients.`
+        : (rating === 'COMPRESSED'
+            ? `Crest Factor: ${currentDr.toFixed(1)} dB — Compressed / limited loudness-war master (peaks near RMS floor).`
+            : `Crest Factor: ${currentDr.toFixed(1)} dB — Balanced studio master dynamics.`);
+    }
+  };
+
+  updateBadge(drMeterVal, drMeterDot, drMeterBadge);
+  if (isFsOpen) {
+    updateBadge(fsDrMeterVal, fsDrMeterDot, fsDrMeterBadge);
+  }
+
   requestAnimationFrame(progressLoop);
 })();
 

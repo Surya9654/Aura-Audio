@@ -320,27 +320,48 @@ input[type="range"] {
 .scrubber-container {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  max-width: 560px;
+  max-width: 620px;
+}
+
+.scrubber-track-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 20px;
+}
+
+.scrubber-heatmap-canvas {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 6px;
+  border-radius: 6px;
+  pointer-events: none;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: height 0.25s var(--ease-out);
+}
+
+.scrubber-track-wrapper:hover .scrubber-heatmap-canvas {
+  height: 8px;
 }
 
 .scrubber-slider {
   flex: 1;
+  width: 100%;
   -webkit-appearance: none;
   appearance: none;
-  height: 6px;
-  border-radius: 6px;
-  background: linear-gradient(to right, var(--accent-gold) var(--p, 0%), rgba(255, 255, 255, 0.12) var(--p, 0%));
+  height: 20px;
+  background: transparent !important;
   outline: none;
   cursor: pointer;
   position: relative;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-  transition: height 0.25s var(--ease-out);
-}
-
-.scrubber-slider:hover {
-  height: 8px;
+  z-index: 2;
+  box-shadow: none !important;
 }
 
 .scrubber-slider::-webkit-slider-thumb {
@@ -360,6 +381,56 @@ input[type="range"] {
 .scrubber-slider:hover::-webkit-slider-thumb,
 .scrubber-slider:active::-webkit-slider-thumb {
   transform: scale(1);
+}
+
+/* Dynamic Range (DR) & Crest Factor Live Badge */
+.dr-meter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  user-select: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: all 0.25s var(--ease-out);
+}
+
+.dr-meter-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  box-shadow: 0 0 6px var(--accent-gold);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.dr-meter-dot.dynamic {
+  background: #fef08a;
+  box-shadow: 0 0 8px #fef08a;
+}
+
+.dr-meter-dot.balanced {
+  background: var(--accent-gold);
+  box-shadow: 0 0 6px var(--accent-gold);
+}
+
+.dr-meter-dot.compressed {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+.dr-meter-badge.compressed {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .volume-slider {
