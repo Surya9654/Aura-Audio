@@ -621,6 +621,16 @@ function updateSignalPath() {
 // 4. Playback Logic
 async function playTrackIndex(index) {
   if (index < 0 || index >= state.filteredTracks.length) return;
+
+  // Immediately halt any previous audio playback to guarantee no overlapping streams
+  try {
+    audioEngine.pause();
+    if (audioEngine.audioElement) {
+      audioEngine.audioElement.pause();
+      audioEngine.audioElement.currentTime = 0;
+    }
+  } catch (e) {}
+
   state.currentTrackIndex = index;
   const track = state.filteredTracks[index];
   state.currentTrack = track;
@@ -2413,8 +2423,14 @@ function initConnectUI() {
             targetIndex = state.filteredTracks.findIndex(t => t.path && t.path.toLowerCase() === action.path.toLowerCase());
           }
         }
-        if (targetIndex === -1 && action.index !== undefined && action.index >= 0) {
-          targetIndex = action.index;
+        if (targetIndex === -1 && action.index !== undefined && action.index >= 0 && action.index < state.tracks.length) {
+          const trackFromIndex = state.tracks[action.index];
+          if (trackFromIndex && trackFromIndex.path) {
+            state.searchQuery = '';
+            state.currentFilter = 'ALL';
+            applyTrackFilter();
+            targetIndex = state.filteredTracks.findIndex(t => t.path && t.path.toLowerCase() === trackFromIndex.path.toLowerCase());
+          }
         }
         if (targetIndex >= 0 && targetIndex < state.filteredTracks.length) {
           playTrackIndex(targetIndex);

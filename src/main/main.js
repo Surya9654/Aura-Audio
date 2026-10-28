@@ -517,16 +517,32 @@ ipcMain.handle('get-connected-devices', async () => {
   return await getWindowsAudioEndpointsAndBluetooth();
 });
 
-app.whenReady().then(async () => {
-  await startStreamingServer();
-  createWindow();
-  widgetBridge.init(mainWindow);
-  remoteServer.start(mainWindow, 4040);
+// Strictly single-instance: prevents duplicate processes that cause overlapping audio playback
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotSingleInstanceLock) {
+  console.log('[Aura Main]: Another instance is already active. Exiting duplicate process.');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Bring primary window to focus if a duplicate instance is triggered
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
   });
-});
+
+  app.whenReady().then(async () => {
+    await startStreamingServer();
+    createWindow();
+    widgetBridge.init(mainWindow);
+    remoteServer.start(mainWindow, 4040);
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   widgetBridge.destroy();

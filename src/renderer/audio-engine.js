@@ -353,6 +353,13 @@ export class HighResAudioEngine {
   }
 
   async loadTrack(track) {
+    if (this.audioElement) {
+      try {
+        this.audioElement.pause();
+        this.audioElement.currentTime = 0;
+      } catch (e) {}
+    }
+    this.isPlaying = false;
     this.currentTrack = track;
     const targetSampleRate = track.sampleRate && track.sampleRate >= 44100 ? track.sampleRate : 44100;
 
