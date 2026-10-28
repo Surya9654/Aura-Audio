@@ -96,11 +96,15 @@
             <p id="library-count-text">Import your lossless FLAC library or local storage drive.</p>
           </div>
           <div class="header-actions">
-            <button class="btn-apple" id="btn-scan-system-music">
+            <button class="btn-apple" id="btn-scan-system-music" title="Scan Windows Music folder">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
               <span>Scan Music Folder</span>
             </button>
-            <button class="btn-apple btn-apple-primary" id="btn-select-custom-folder">
+            <button class="btn-apple" id="btn-select-music-files" title="Select and import individual FLAC, WAV, AIFF or audio files">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+              <span>Import Audio Files</span>
+            </button>
+            <button class="btn-apple btn-apple-primary" id="btn-select-custom-folder" title="Select and import a whole audio directory">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               <span>Import Audio Directory</span>
             </button>
@@ -224,7 +228,52 @@
         </div>
 
         <div class="studio-grid dsp-panels">
-          <!-- Headphone Crossfeed (aligned under presets column) -->
+          <!-- 1. True Stereo & Soundstage Architecture -->
+          <div class="signal-path dsp-panel" id="true-stereo-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">True Stereo &amp; Soundstage</h3>
+              <span class="spec-chip gold" id="stereo-mode-chip">TRUE STEREO 2.0</span>
+            </div>
+            <p class="dsp-panel-desc">Discrete 2.0 dual-mono isolation with 100% channel separation, calibrated reference width, L/R balance trim, and phase polarity alignment.</p>
+            <div class="dsp-row">
+              <span class="dsp-label">Mode</span>
+              <div class="stereo-mode-selector" id="stereo-mode-selector">
+                <button type="button" class="btn-segment active" data-mode="true-stereo" id="btn-mode-true-stereo">True Stereo</button>
+                <button type="button" class="btn-segment" data-mode="crossfeed" id="btn-mode-crossfeed">Crossfeed</button>
+                <button type="button" class="btn-segment" data-mode="mono" id="btn-mode-mono">Mono</button>
+              </div>
+            </div>
+            <div class="dsp-row">
+              <span class="dsp-label">Stereo Width</span>
+              <div class="dsp-slider-group">
+                <input type="range" id="stereo-width" min="0" max="150" step="5" value="100">
+                <span class="dsp-value" id="stereo-width-val">100%</span>
+              </div>
+            </div>
+            <div class="dsp-row">
+              <span class="dsp-label">L/R Balance</span>
+              <div class="dsp-slider-group">
+                <input type="range" id="stereo-balance" min="-100" max="100" step="2" value="0">
+                <span class="dsp-value" id="stereo-balance-val">Center</span>
+              </div>
+            </div>
+            <div class="dsp-row" style="padding: 8px 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px;">
+                <label class="stereo-check-label" title="Swap Left and Right channels">
+                  <input type="checkbox" id="toggle-channel-swap">
+                  <span class="stereo-check-box"></span>
+                  <span>Swap L ↔ R</span>
+                </label>
+                <label class="stereo-check-label" title="Invert Left channel phase (180°) to test or fix out-of-phase recordings">
+                  <input type="checkbox" id="toggle-phase-invert">
+                  <span class="stereo-check-box"></span>
+                  <span>Phase Invert (180°)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Headphone Crossfeed (bs2b) -->
           <div class="signal-path dsp-panel" id="crossfeed-panel">
             <h3>Headphone Crossfeed</h3>
             <p class="dsp-panel-desc">Blends a low-passed, slightly delayed fraction of each channel into the opposite ear to move the soundstage out of your head, like listening to speakers.</p>
@@ -524,6 +573,11 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect><rect x="6" y="6" width="6" height="6" rx="1" ry="1"></rect></svg>
       </button>
 
+      <button class="btn-ctrl" id="btn-quick-true-stereo" title="Active Stereo Architecture (Click to toggle True Stereo / Crossfeed)" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(229, 185, 95, 0.28); background: rgba(229, 185, 95, 0.08);">
+        <span class="stereo-status-dot" id="stereo-status-dot" style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent-gold); display: inline-block;"></span>
+        <span id="quick-stereo-mode-name">True Stereo</span>
+      </button>
+
       <button class="btn-ctrl" id="btn-quick-preset" title="Active Acoustic Target" style="font-size: 12px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
         <span id="quick-preset-name">Reference</span>
@@ -639,6 +693,18 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Drag & Drop Audio Files Overlay -->
+  <div class="drag-drop-overlay" id="drag-drop-overlay">
+    <div class="drag-drop-modal">
+      <div class="drag-drop-icon">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      </div>
+      <h2>Import Lossless Audio Files</h2>
+      <p>Drop FLAC, WAV, AIFF, ALAC, or audio folders to import directly into your library</p>
+      <div class="spec-chip gold" style="margin-top: 10px;">BIT-PERFECT DIRECT INGEST</div>
     </div>
   </div>
 

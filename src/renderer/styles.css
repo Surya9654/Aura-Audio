@@ -59,6 +59,7 @@ body {
   height: var(--titlebar-height);
   background: rgba(10, 13, 18, 0.85);
   backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   -webkit-app-region: drag;
   display: flex;
   align-items: center;
@@ -150,6 +151,9 @@ body {
   pointer-events: none;
   z-index: 0;
   transition: opacity 1s ease;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 /* Apple-style Sidebar */
@@ -157,6 +161,7 @@ body {
   width: var(--sidebar-width);
   background: rgba(11, 14, 20, 0.65);
   backdrop-filter: blur(35px);
+  -webkit-backdrop-filter: blur(35px);
   border-right: 1px solid var(--border-glass);
   display: flex;
   flex-direction: column;
@@ -164,6 +169,8 @@ body {
   gap: 20px;
   z-index: 10;
   overflow-y: auto;
+  transform: translateZ(0);
+  isolation: isolate;
 }
 
 .nav-section {
@@ -378,8 +385,11 @@ body {
   align-items: center;
   justify-content: space-between;
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   position: relative;
   overflow: hidden;
+  transform: translateZ(0);
+  isolation: isolate;
 }
 
 .audiophile-banner::before {
@@ -453,8 +463,11 @@ body {
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
   overflow: hidden;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  transform: translateZ(0);
+  isolation: isolate;
 }
 
 .track-table {
@@ -722,12 +735,15 @@ body {
   height: var(--playerbar-height);
   background: rgba(13, 17, 24, 0.88);
   backdrop-filter: blur(35px);
+  -webkit-backdrop-filter: blur(35px);
   border-top: 1px solid var(--border-glass);
   display: grid;
   grid-template-columns: 320px 1fr 320px;
   align-items: center;
   padding: 0 24px;
   z-index: 50;
+  transform: translateZ(0);
+  isolation: isolate;
 }
 
 /* Track Metadata widget */
@@ -839,11 +855,14 @@ body {
   justify-content: center;
   box-shadow: 0 4px 18px rgba(255, 255, 255, 0.3);
   transition: var(--transition-smooth);
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+  backface-visibility: hidden;
 }
 
 .btn-play-master:hover {
   background: #f1f5f9;
-  transform: scale(1.06);
+  transform: scale(1.06) translateZ(0);
   box-shadow: 0 6px 24px rgba(255, 255, 255, 0.45);
 }
 
@@ -888,6 +907,8 @@ body {
   background: #fff;
   cursor: pointer;
   box-shadow: 0 0 6px rgba(0,0,0,0.4);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Right Output / Volume Controls */
@@ -928,10 +949,13 @@ body {
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 200;
   display: none;
   align-items: center;
   justify-content: center;
+  transform: translateZ(0);
+  will-change: opacity;
 }
 
 .modal-overlay.active {
@@ -948,6 +972,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform, opacity;
   animation: modalScale 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

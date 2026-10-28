@@ -20,6 +20,14 @@
 - **Software-Side DC Offset & Subsonic Rumble Filter**: 4th-order (-24 dB/oct) Butterworth high-pass filter at 20 Hz in the 32-bit float pipeline. Eliminates 0 Hz DC bias, power supply electrical ripple (5–18 Hz), and low-frequency rumble that strains headphone amplifiers, without affecting musical sub-bass.
 - **Exclusive Mode & Jitter Buffer**: Low-latency WASAPI exclusive buffering support with a 1 MB read-ahead jitter buffer to prevent Windows shared mixer audio degradation.
 - **Live Signal Path Inspector**: Real-time breakdown displaying source resolution, active 32-bit float DSP chain, crossfeed status, DC filter & noise gate states, headroom attenuation, and output endpoints.
+- **True Stereo Mode & Soundstage Architecture**:
+  - **100% Discrete Channel Isolation**: Strict dual-mono channel separation without inter-channel leakage or algorithmic cross-talk, preserving bit-accurate spatial imaging.
+  - **Multi-Mode Soundfield Switch**: Seamless 1-click toggling between **True Stereo (Discrete 2.0)**, **Headphone Crossfeed (bs2b)**, and **Mono Sum (Phase Coherence Check)**.
+  - **Mid/Side (M/S) Soundstage Width**: Calibrated continuous width expansion ($0\%$ Mono to $150\%$ Wide, with $100\%$ True Stereo Reference lock).
+  - **Independent L/R Channel Balance Trim**: Micro-dB precision balance adjustments with dead-center detent.
+  - **Acoustic Phase Polarity Invert (180°)**: Flips Left channel polarity ($180^\circ$) to instantly diagnose or correct out-of-phase audio files and center vocal cancellations.
+  - **L ↔ R Channel Swap**: Quickly verifies channel orientation or corrects reversed headphone wiring.
+  - **Quick Player-Bar Mode Pill**: One-click status badge on the master player bar for instant mode switching.
 - **Pure Mode (DSP Bypass)**: Seamlessly bypasses all DSP, EQ, and crossfeed filters while preserving configurations for instant toggle.
 - **Device Volume Mode**: Locks internal software digital attenuation at 100%, allowing system/hardware volume control with maximum bit-depth preservation.
 - **Hardware DAC Interrogation Engine (Backend Preserved)**: Underlying WMI/PowerShell device discovery logic remains intact in the codebase for future hardware integration.

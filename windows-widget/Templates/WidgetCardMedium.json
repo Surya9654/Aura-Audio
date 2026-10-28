@@ -1,0 +1,143 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "ColumnSet",
+      "spacing": "Medium",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "96px",
+          "items": [
+            {
+              "type": "Image",
+              "url": "${coverUrl}",
+              "size": "Auto",
+              "style": "RoundedCorners"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${title}",
+              "weight": "Bolder",
+              "size": "Medium",
+              "wrap": false,
+              "maxLines": 1
+            },
+            {
+              "type": "TextBlock",
+              "text": "${artist}",
+              "size": "Default",
+              "isSubtle": true,
+              "spacing": "None",
+              "wrap": false,
+              "maxLines": 1
+            },
+            {
+              "type": "TextBlock",
+              "text": "${album}",
+              "size": "Small",
+              "isSubtle": true,
+              "spacing": "None",
+              "wrap": false,
+              "maxLines": 1
+            },
+            {
+              "type": "Container",
+              "spacing": "Small",
+              "style": "emphasis",
+              "bleed": false,
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "${badgeText}",
+                  "size": "ExtraSmall",
+                  "color": "Warning",
+                  "weight": "Bolder"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ColumnSet",
+      "spacing": "Small",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "auto",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${currentTimeText}",
+              "size": "ExtraSmall",
+              "isSubtle": true,
+              "fontType": "Monospace"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${progressVisual}",
+              "size": "ExtraSmall",
+              "color": "Warning",
+              "fontType": "Monospace"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "auto",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${durationText}",
+              "size": "ExtraSmall",
+              "isSubtle": true,
+              "fontType": "Monospace"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Execute",
+      "title": "⏮ Prev",
+      "verb": "previous",
+      "data": {
+        "command": "prev"
+      }
+    },
+    {
+      "type": "Action.Execute",
+      "title": "${playPauseTitle}",
+      "verb": "togglePlay",
+      "data": {
+        "command": "togglePlay"
+      }
+    },
+    {
+      "type": "Action.Execute",
+      "title": "Next ⏭",
+      "verb": "next",
+      "data": {
+        "command": "next"
+      }
+    }
+  ]
+}

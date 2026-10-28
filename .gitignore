@@ -20,3 +20,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# .NET / Windows Widget build artifacts
+bin/
+obj/
+*.user
+

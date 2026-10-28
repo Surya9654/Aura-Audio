@@ -23,6 +23,15 @@ export class HighResAudioEngine {
     this.crossfeedProfile = 'bauer';
     this.crossfeedAmount = 1.0; // 0..1 scales the feed level
     this.exclusiveMode = false; // low-latency path required by Chromium's WASAPI exclusive mode
+
+    // True Stereo & Soundstage Architecture
+    this.stereoMode = 'true-stereo'; // 'true-stereo' (Discrete 2.0 unadulterated reference) | 'crossfeed' | 'mono'
+    this.stereoBalance = 0.0;        // -1.0 (Left) to +1.0 (Right), 0.0 = Dead Center
+    this.stereoWidth = 1.0;          // 1.0 = 100% True Stereo reference, 0.0 = Mono, 1.5 = Wide
+    this.channelSwap = false;        // Swap L <-> R channels
+    this.phaseInvertL = false;       // Invert Left channel polarity 180 deg
+    this.phaseInvertR = false;       // Invert Right channel polarity 180 deg
+    this.stereoStage = null;
     
     // Subsonic & DC Offset Rumble Filter (20Hz High-Pass)
     this.subsonicFilterEnabled = true;
@@ -126,6 +135,7 @@ export class HighResAudioEngine {
     this.buildDCOffsetFilter();
     this.buildNoiseGate();
     this.buildCrossfeed();
+    this.buildStereoStage();
 
     this.analyserNode.connect(this.gainNode);
     this.gainNode.connect(this.audioContext.destination);
@@ -194,11 +204,152 @@ export class HighResAudioEngine {
   }
 
   setCrossfeed(enabled, profile, amount) {
-    if (enabled !== undefined) this.crossfeedEnabled = enabled;
+    if (enabled !== undefined) {
+      this.crossfeedEnabled = enabled;
+      if (enabled) {
+        this.stereoMode = 'crossfeed';
+      } else if (this.stereoMode === 'crossfeed') {
+        this.stereoMode = 'true-stereo';
+      }
+    }
     if (profile && CROSSFEED_PROFILES[profile]) this.crossfeedProfile = profile;
     if (amount !== undefined) this.crossfeedAmount = Math.max(0, Math.min(1, amount));
     this.updateCrossfeed();
+    this.updateStereoStage();
     this.rewire();
+  }
+
+  // True Stereo & Soundstage Stage:
+  // Independent discrete L/R paths with 2x2 matrix for 100% true channel separation,
+  // Mid/Side soundstage width, L/R balance trim, polarity inversion, and channel swap.
+  buildStereoStage() {
+    const ctx = this.audioContext;
+    const input = ctx.createGain();
+    input.channelCount = 2;
+    input.channelCountMode = 'explicit';
+    input.channelInterpretation = 'discrete';
+
+    const splitter = ctx.createChannelSplitter(2);
+    const merger = ctx.createChannelMerger(2);
+
+    const gainL = ctx.createGain();
+    const gainR = ctx.createGain();
+
+    const lToL = ctx.createGain();
+    const lToR = ctx.createGain();
+    const rToL = ctx.createGain();
+    const rToR = ctx.createGain();
+
+    input.connect(splitter);
+
+    splitter.connect(gainL, 0);
+    splitter.connect(gainR, 1);
+
+    gainL.connect(lToL);
+    gainL.connect(lToR);
+    gainR.connect(rToL);
+    gainR.connect(rToR);
+
+    lToL.connect(merger, 0, 0);
+    rToL.connect(merger, 0, 0);
+    lToR.connect(merger, 0, 1);
+    rToR.connect(merger, 0, 1);
+
+    const output = ctx.createGain();
+    output.channelCount = 2;
+    output.channelCountMode = 'explicit';
+    output.channelInterpretation = 'discrete';
+    merger.connect(output);
+
+    this.stereoStage = {
+      input,
+      output,
+      gainL,
+      gainR,
+      lToL,
+      lToR,
+      rToL,
+      rToR
+    };
+    this.updateStereoStage();
+  }
+
+  updateStereoStage() {
+    if (!this.stereoStage || !this.audioContext) return;
+    const t = this.audioContext.currentTime;
+    const ramp = 0.03; // Smooth 30ms click-free transition
+
+    // 1. Balance Calculation (smooth linear pan with center detent)
+    let bL = 1.0;
+    let bR = 1.0;
+    if (this.stereoBalance < 0) {
+      bR = Math.max(0, 1.0 + this.stereoBalance);
+    } else if (this.stereoBalance > 0) {
+      bL = Math.max(0, 1.0 - this.stereoBalance);
+    }
+
+    // Polarity phase inversion (0 or 180 degrees)
+    const polL = this.phaseInvertL ? -1.0 : 1.0;
+    const polR = this.phaseInvertR ? -1.0 : 1.0;
+
+    this.stereoStage.gainL.gain.setTargetAtTime(bL * polL, t, ramp);
+    this.stereoStage.gainR.gain.setTargetAtTime(bR * polR, t, ramp);
+
+    // 2. Routing Matrix
+    if (this.stereoMode === 'mono') {
+      // Mono folddown: (L + R) / 2 to both channels
+      this.stereoStage.lToL.gain.setTargetAtTime(0.5, t, ramp);
+      this.stereoStage.rToL.gain.setTargetAtTime(0.5, t, ramp);
+      this.stereoStage.lToR.gain.setTargetAtTime(0.5, t, ramp);
+      this.stereoStage.rToR.gain.setTargetAtTime(0.5, t, ramp);
+    } else if (this.channelSwap) {
+      // Channel Swap: L -> R, R -> L
+      this.stereoStage.lToL.gain.setTargetAtTime(0.0, t, ramp);
+      this.stereoStage.rToL.gain.setTargetAtTime(1.0, t, ramp);
+      this.stereoStage.lToR.gain.setTargetAtTime(1.0, t, ramp);
+      this.stereoStage.rToR.gain.setTargetAtTime(0.0, t, ramp);
+    } else {
+      // True Stereo: 100% discrete separation (reference width 1.0)
+      // When in True Stereo mode, direct paths are 1.0 and crosstalk is 0.0.
+      const w = this.stereoMode === 'true-stereo' ? (this.stereoWidth !== undefined ? this.stereoWidth : 1.0) : 1.0;
+      const direct = (1.0 + w) / 2.0;
+      const cross = (1.0 - w) / 2.0;
+
+      this.stereoStage.lToL.gain.setTargetAtTime(direct, t, ramp);
+      this.stereoStage.rToR.gain.setTargetAtTime(direct, t, ramp);
+      this.stereoStage.rToL.gain.setTargetAtTime(cross, t, ramp);
+      this.stereoStage.lToR.gain.setTargetAtTime(cross, t, ramp);
+    }
+  }
+
+  setStereoMode(mode) {
+    if (['true-stereo', 'crossfeed', 'mono'].includes(mode)) {
+      this.stereoMode = mode;
+      this.crossfeedEnabled = (mode === 'crossfeed');
+      this.updateStereoStage();
+      this.rewire();
+    }
+  }
+
+  setStereoBalance(balance) {
+    this.stereoBalance = Math.max(-1.0, Math.min(1.0, parseFloat(balance) || 0));
+    this.updateStereoStage();
+  }
+
+  setStereoWidth(width) {
+    this.stereoWidth = Math.max(0.0, Math.min(1.5, parseFloat(width) || 1.0));
+    this.updateStereoStage();
+  }
+
+  setChannelSwap(swap) {
+    this.channelSwap = !!swap;
+    this.updateStereoStage();
+  }
+
+  setPhaseInvert(invertL, invertR = false) {
+    this.phaseInvertL = !!invertL;
+    this.phaseInvertR = !!invertR;
+    this.updateStereoStage();
   }
 
   async loadTrack(track) {
@@ -428,6 +579,7 @@ export class HighResAudioEngine {
     try { this.preampNode.disconnect(); } catch (e) {}
     try { lastEq.disconnect(); } catch (e) {}
     if (this.crossfeed) { try { this.crossfeed.output.disconnect(); } catch (e) {} }
+    if (this.stereoStage) { try { this.stereoStage.output.disconnect(); } catch (e) {} }
     if (this.gateGainNode) { try { this.gateGainNode.disconnect(); } catch (e) {} }
     if (this.gateAnalyserNode) { try { this.gateAnalyserNode.disconnect(); } catch (e) {} }
 
@@ -441,12 +593,17 @@ export class HighResAudioEngine {
 
     // Pure Mode (Bit-Perfect DSP bypass)
     if (this.bitPerfect) {
+      let pureStage = inputStage;
+      if (this.stereoStage) {
+        inputStage.connect(this.stereoStage.input);
+        pureStage = this.stereoStage.output;
+      }
       if (this.noiseGateEnabled && this.gateGainNode) {
-        inputStage.connect(this.gateGainNode);
-        if (this.gateAnalyserNode) inputStage.connect(this.gateAnalyserNode);
+        pureStage.connect(this.gateGainNode);
+        if (this.gateAnalyserNode) pureStage.connect(this.gateAnalyserNode);
         this.gateGainNode.connect(this.analyserNode);
       } else {
-        inputStage.connect(this.analyserNode);
+        pureStage.connect(this.analyserNode);
       }
       return;
     }
@@ -459,11 +616,17 @@ export class HighResAudioEngine {
       currentNode = filter;
     }
 
-    // After EQ: route through Crossfeed if enabled
+    // After EQ: route through Crossfeed if in crossfeed mode
     let postDsp = lastEq;
-    if (this.crossfeedEnabled && this.crossfeed) {
+    if (this.stereoMode === 'crossfeed' && this.crossfeedEnabled && this.crossfeed) {
       lastEq.connect(this.crossfeed.input);
       postDsp = this.crossfeed.output;
+    }
+
+    // Route through True Stereo & Soundstage stage
+    if (this.stereoStage) {
+      postDsp.connect(this.stereoStage.input);
+      postDsp = this.stereoStage.output;
     }
 
     // Noise Gate Stage: sidechain level detection + gain ducking
@@ -480,6 +643,8 @@ export class HighResAudioEngine {
   applyState() {
     this.applyEQPreset(this.eqGains);
     this.setPreamp(this.preampDb);
+    this.updateCrossfeed();
+    this.updateStereoStage();
     this.rewire();
     this.applyVolume();
   }

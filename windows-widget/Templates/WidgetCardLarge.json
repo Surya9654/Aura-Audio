@@ -1,0 +1,159 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "ColumnSet",
+      "spacing": "Medium",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "140px",
+          "items": [
+            {
+              "type": "Image",
+              "url": "${coverUrl}",
+              "size": "Auto",
+              "style": "RoundedCorners"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "AURA LOSSLESS STUDIO",
+              "size": "ExtraSmall",
+              "isSubtle": true,
+              "weight": "Bolder",
+              "color": "Warning"
+            },
+            {
+              "type": "TextBlock",
+              "text": "${title}",
+              "weight": "Bolder",
+              "size": "Large",
+              "wrap": false,
+              "maxLines": 1
+            },
+            {
+              "type": "TextBlock",
+              "text": "${artist}",
+              "size": "Medium",
+              "isSubtle": true,
+              "spacing": "None",
+              "wrap": false,
+              "maxLines": 1
+            },
+            {
+              "type": "TextBlock",
+              "text": "${album}",
+              "size": "Small",
+              "isSubtle": true,
+              "spacing": "None",
+              "wrap": false,
+              "maxLines": 1
+            },
+            {
+              "type": "FactSet",
+              "spacing": "Small",
+              "facts": [
+                {
+                  "title": "Resolution",
+                  "value": "${telemetryInfo}"
+                },
+                {
+                  "title": "Audio Route",
+                  "value": "${audioDeviceName}"
+                },
+                {
+                  "title": "Engine",
+                  "value": "WASAPI Bit-Perfect"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ColumnSet",
+      "spacing": "Medium",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "auto",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${currentTimeText}",
+              "size": "Small",
+              "isSubtle": true,
+              "fontType": "Monospace"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${progressVisual}",
+              "size": "Small",
+              "color": "Warning",
+              "fontType": "Monospace"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "auto",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${durationText}",
+              "size": "Small",
+              "isSubtle": true,
+              "fontType": "Monospace"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Execute",
+      "title": "⏮ Previous",
+      "verb": "previous",
+      "data": {
+        "command": "prev"
+      }
+    },
+    {
+      "type": "Action.Execute",
+      "title": "${playPauseTitle}",
+      "verb": "togglePlay",
+      "data": {
+        "command": "togglePlay"
+      }
+    },
+    {
+      "type": "Action.Execute",
+      "title": "Next ⏭",
+      "verb": "next",
+      "data": {
+        "command": "next"
+      }
+    },
+    {
+      "type": "Action.OpenUrl",
+      "title": "Open Aura Studio",
+      "url": "aura://open"
+    }
+  ]
+}

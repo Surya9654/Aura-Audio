@@ -15,13 +15,14 @@ export class DynamicsHeatmapManager {
     this.activeTrackPath = null;
     this.currentMetrics = { peak: 0, rms: 0, crestFactorDb: 0, dynamicRating: 'SILENT' };
     this.smoothCrestFactor = 12.0;
+    this.enabled = false; // Heatmap feature switched off as of now
   }
 
   /**
    * Initializes or seeds the dynamic envelope for a track based on its metadata
    */
   initTrack(track) {
-    if (!track) return;
+    if (!this.enabled || !track) return;
     this.activeTrackPath = track.path || track.title;
 
     // Seed deterministic pseudo-random baseline envelope using track hash
@@ -55,7 +56,7 @@ export class DynamicsHeatmapManager {
    * Refines the timeline bin under the current playhead with live measured metrics
    */
   recordProgress(progressPct, metrics) {
-    if (!metrics || metrics.dynamicRating === 'SILENT' || metrics.crestFactorDb <= 0) return;
+    if (!this.enabled || !metrics || metrics.dynamicRating === 'SILENT' || metrics.crestFactorDb <= 0) return;
 
     this.currentMetrics = metrics;
     this.smoothCrestFactor = this.smoothCrestFactor * 0.85 + metrics.crestFactorDb * 0.15;
@@ -69,7 +70,7 @@ export class DynamicsHeatmapManager {
    * Renders the micro-dynamics heatmap onto a target canvas at 60 FPS
    */
   render(canvas, progressPct, metrics, themeAccent = '#e5b95f') {
-    if (!canvas) return;
+    if (!this.enabled || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 

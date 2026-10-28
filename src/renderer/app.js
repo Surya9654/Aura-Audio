@@ -268,6 +268,26 @@ function renderHardwareList(devices) {
 }
 
 // 3. Audio File Scanner & Importer
+const btnSelectFiles = document.getElementById('btn-select-music-files');
+if (btnSelectFiles) {
+  btnSelectFiles.addEventListener('click', async () => {
+    libraryCountText.textContent = 'Selecting lossless audio files...';
+    try {
+      const tracks = await window.electronAPI.selectMusicFiles();
+      if (tracks && tracks.length > 0) {
+        addTracks(tracks);
+        const flacCount = state.tracks.filter(t => (t.format && t.format.toUpperCase() === 'FLAC') || (t.path && t.path.toLowerCase().endsWith('.flac'))).length;
+        libraryCountText.textContent = `Library: ${state.tracks.length} tracks (${flacCount} FLAC) • Imported ${tracks.length} audio file(s)`;
+      } else {
+        libraryCountText.textContent = `Library: ${state.tracks.length} tracks`;
+      }
+    } catch (err) {
+      console.error('File import error:', err);
+      libraryCountText.textContent = `Error importing audio files.`;
+    }
+  });
+}
+
 document.getElementById('btn-select-custom-folder').addEventListener('click', async () => {
   const folder = await window.electronAPI.selectMusicFolder();
   if (folder) {
@@ -278,6 +298,60 @@ document.getElementById('btn-select-custom-folder').addEventListener('click', as
 document.getElementById('btn-scan-system-music').addEventListener('click', async () => {
   const sysInfo = await window.electronAPI.getSystemInfo();
   await scanFolder(sysInfo.musicDir);
+});
+
+// Drag and drop audio files & directories into the app while running
+const dragDropOverlay = document.getElementById('drag-drop-overlay');
+let dragCounter = 0;
+
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter++;
+  if (dragDropOverlay) dragDropOverlay.classList.add('active');
+});
+
+window.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    if (dragDropOverlay) dragDropOverlay.classList.remove('active');
+  }
+});
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter = 0;
+  if (dragDropOverlay) dragDropOverlay.classList.remove('active');
+
+  const files = Array.from(e.dataTransfer ? e.dataTransfer.files : []);
+  if (!files || files.length === 0) return;
+
+  const paths = files.map(f => f.path).filter(Boolean);
+  if (paths.length === 0) return;
+
+  libraryCountText.textContent = `Processing ${paths.length} dropped audio item(s)...`;
+  try {
+    const tracks = await window.electronAPI.parseAudioFiles(paths);
+    if (tracks && tracks.length > 0) {
+      addTracks(tracks);
+      const flacCount = state.tracks.filter(t => (t.format && t.format.toUpperCase() === 'FLAC') || (t.path && t.path.toLowerCase().endsWith('.flac'))).length;
+      libraryCountText.textContent = `Library: ${state.tracks.length} tracks (${flacCount} FLAC) • Imported ${tracks.length} dropped file(s)`;
+    } else {
+      libraryCountText.textContent = `No supported audio files found in dropped items.`;
+    }
+  } catch (err) {
+    console.error('Error importing dropped audio files:', err);
+    libraryCountText.textContent = `Error processing dropped audio files.`;
+  }
 });
 
 function getSavedFolders() {
@@ -298,6 +372,14 @@ function addTracks(newTracks) {
   newTracks.forEach(t => byPath.set(t.path.toLowerCase(), t));
   state.tracks = Array.from(byPath.values()).sort((a, b) => a.title.localeCompare(b.title));
   applyTrackFilter();
+
+  // If a track was already loaded or playing, maintain accurate index in updated filtered list
+  if (state.currentTrack) {
+    const newIdx = state.filteredTracks.findIndex(t => t.path && state.currentTrack.path && t.path.toLowerCase() === state.currentTrack.path.toLowerCase());
+    if (newIdx !== -1) {
+      state.currentTrackIndex = newIdx;
+    }
+  }
 }
 
 async function scanFolder(folderPath) {
@@ -496,11 +578,16 @@ function updateSignalPath() {
     set('sp-source-sub', '—');
   }
 
-  const cfLabel = audioEngine.crossfeedEnabled ? ` • Crossfeed: ${CROSSFEED_PROFILES[audioEngine.crossfeedProfile].name.split(' (')[0]}` : '';
+  const cfName = CROSSFEED_PROFILES[audioEngine.crossfeedProfile] ? CROSSFEED_PROFILES[audioEngine.crossfeedProfile].name.split(' (')[0] : 'Bauer';
+  const stereoLabel = audioEngine.stereoMode === 'true-stereo'
+    ? ' • True Stereo (Discrete 2.0)'
+    : (audioEngine.stereoMode === 'mono' ? ' • Mono Folddown' : ` • Crossfeed (${cfName})`);
+  const swapLabel = audioEngine.channelSwap ? ' • L↔R Swapped' : '';
+  const invertLabel = audioEngine.phaseInvertL ? ' • 180° Polarity' : '';
   const dcLabel = audioEngine.subsonicFilterEnabled ? ' • DC/20Hz' : '';
   const gateLabel = audioEngine.noiseGateEnabled ? ` • Gate (${audioEngine.noiseGateThreshold}dB)` : '';
   set('sp-dsp', bypass ? 'Pure Mode (bypassed)' : presetName);
-  set('sp-dsp-sub', bypass ? `Bypassed EQ/Preamp${gateLabel}` : `32-bit float • 10-band EQ • Preamp ${preamp > 0 ? '+' : ''}${preamp.toFixed(1)} dB${cfLabel}${dcLabel}${gateLabel}`);
+  set('sp-dsp-sub', bypass ? `Bypassed EQ/Preamp${stereoLabel}${swapLabel}${invertLabel}${gateLabel}` : `32-bit float • 10-band EQ • Preamp ${preamp > 0 ? '+' : ''}${preamp.toFixed(1)} dB${stereoLabel}${swapLabel}${invertLabel}${dcLabel}${gateLabel}`);
 
   const devName = state.activeHardwareDevice ? state.activeHardwareDevice.name : (state.detectedDACs[0] ? state.detectedDACs[0].name : 'System audio');
   const outRate = audioEngine.outputSampleRate;
@@ -586,6 +673,62 @@ function updatePlayPauseState(isPlaying) {
   if (fsIcon) fsIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
   if (lsIcon) lsIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
   if (flsIcon) flsIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
+  syncWidgetState();
+}
+
+// Windows 11 Native Widget Board synchronization helper
+function syncWidgetState() {
+  if (!window.electronAPI || !window.electronAPI.updateWidgetState) return;
+  const track = state.filteredTracks[state.currentTrackIndex] || state.currentTrack;
+  const el = audioEngine.audioElement;
+  const devName = state.activeHardwareDevice ? state.activeHardwareDevice.name : (state.detectedDACs[0] ? state.detectedDACs[0].name : 'WASAPI Bit-Perfect Output');
+
+  if (track) {
+    window.electronAPI.updateWidgetState({
+      title: track.title || 'Unknown Title',
+      artist: track.artist || 'Unknown Artist',
+      album: track.album || 'Lossless Album',
+      coverUrl: getTrackCover(track),
+      badgeText: `${track.format || 'FLAC'} • ${track.bitsPerSample || 24}-BIT • ${((track.sampleRate || 44100) / 1000).toFixed(1)} kHz`,
+      telemetryInfo: `${track.bitsPerSample || 24}-bit / ${((track.sampleRate || 44100) / 1000).toFixed(1)} kHz (${track.bitrate ? track.bitrate + ' kbps' : 'Lossless'})`,
+      audioDeviceName: devName,
+      isPlaying: audioEngine.isPlaying,
+      currentTime: el ? el.currentTime : 0,
+      duration: el && el.duration ? el.duration : (track.duration || 0)
+    });
+  } else {
+    window.electronAPI.updateWidgetState({
+      title: 'No Track Playing',
+      artist: 'Aura Lossless Studio',
+      album: 'Ready',
+      coverUrl: '',
+      badgeText: 'FLAC • 24-BIT • 96.0 kHz',
+      telemetryInfo: '24-bit / 96.0 kHz Lossless',
+      audioDeviceName: devName,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0
+    });
+  }
+}
+
+// Listen for remote action invocations from Windows 11 Widget Board
+if (window.electronAPI && window.electronAPI.onWidgetAction) {
+  window.electronAPI.onWidgetAction((action) => {
+    console.log('[Aura Studio] Action received from Windows 11 Widget:', action);
+    if (action === 'togglePlay') {
+      btnMasterPlay.click();
+    } else if (action === 'next') {
+      btnNext.click();
+    } else if (action === 'prev' || action === 'previous') {
+      btnPrev.click();
+    } else if (action === 'play') {
+      if (!audioEngine.isPlaying) btnMasterPlay.click();
+    } else if (action === 'pause') {
+      if (audioEngine.isPlaying) btnMasterPlay.click();
+    }
+    syncWidgetState();
+  });
 }
 
 btnMasterPlay.addEventListener('click', () => {
@@ -700,20 +843,23 @@ const fsDrMeterBadge = document.getElementById('fs-dr-meter-badge');
     }
   }
 
-  // Micro-Dynamics & Crest Factor Heatmap Timeline Processing
-  const metrics = audioEngine.getDynamicsMetrics();
-  dynamicsHeatmap.recordProgress(pct, metrics);
-
-  const activeTheme = MASTER_THEMES.find(t => t.id === state.activeThemeId);
-  const themeAccent = activeTheme ? activeTheme.swatchColor : '#e5b95f';
-
-  if (scrubberHeatmapCanvas) {
-    dynamicsHeatmap.render(scrubberHeatmapCanvas, pct, metrics, themeAccent);
-  }
-
+  // Micro-Dynamics & Crest Factor Heatmap Timeline Processing (Switched off as of now)
   const isFsOpen = fsPlayer && fsPlayer.classList.contains('open');
-  if (isFsOpen && fsScrubberHeatmapCanvas) {
-    dynamicsHeatmap.render(fsScrubberHeatmapCanvas, pct, metrics, themeAccent);
+  const ENABLE_HEATMAP = false;
+  const metrics = audioEngine.getDynamicsMetrics();
+  if (ENABLE_HEATMAP) {
+    dynamicsHeatmap.recordProgress(pct, metrics);
+
+    const activeTheme = MASTER_THEMES.find(t => t.id === state.activeThemeId);
+    const themeAccent = activeTheme ? activeTheme.swatchColor : '#e5b95f';
+
+    if (scrubberHeatmapCanvas) {
+      dynamicsHeatmap.render(scrubberHeatmapCanvas, pct, metrics, themeAccent);
+    }
+
+    if (isFsOpen && fsScrubberHeatmapCanvas) {
+      dynamicsHeatmap.render(fsScrubberHeatmapCanvas, pct, metrics, themeAccent);
+    }
   }
 
   // Update Dynamic Range Badges (DR XX dB • Dynamic/Compressed)
@@ -958,6 +1104,7 @@ async function initApp() {
   startVisualizer();
   await scanHardwareDACs();
   updateSignalPath();
+  syncWidgetState();
 
   // Auto-scan prioritized music folders (FLAC_files, Music, etc.) and user profile plus saved folders
   try {
@@ -965,7 +1112,7 @@ async function initApp() {
     const prioritizedRoots = [
       sys.userHome + '\\FLAC_files',
       sys.musicDir,
-      sys.userHome,
+      sys.appRoot + '\\demo_lossless',
       ...getSavedFolders()
     ];
     // Remove duplicates while keeping order
@@ -1501,9 +1648,167 @@ function applyCrossfeed() {
   crossfeedAmountVal.textContent = `${crossfeedAmount.value}%`;
   localStorage.setItem('aura.crossfeed', JSON.stringify(cfg));
   audioEngine.setCrossfeed(cfg.enabled, cfg.profile, cfg.amount);
+  if (typeof updateStereoUIElements === 'function') {
+    updateStereoUIElements();
+  }
   updateSignalPath();
 }
 [toggleCrossfeed, crossfeedProfileSel, crossfeedAmount].forEach(el => el.addEventListener('input', applyCrossfeed));
+
+// 10b. True Stereo Mode & Soundstage Architecture
+const stereoModeChip = document.getElementById('stereo-mode-chip');
+const btnModeTrueStereo = document.getElementById('btn-mode-true-stereo');
+const btnModeCrossfeed = document.getElementById('btn-mode-crossfeed');
+const btnModeMono = document.getElementById('btn-mode-mono');
+const stereoWidthInput = document.getElementById('stereo-width');
+const stereoWidthVal = document.getElementById('stereo-width-val');
+const stereoBalanceInput = document.getElementById('stereo-balance');
+const stereoBalanceVal = document.getElementById('stereo-balance-val');
+const toggleChannelSwap = document.getElementById('toggle-channel-swap');
+const togglePhaseInvert = document.getElementById('toggle-phase-invert');
+const btnQuickTrueStereo = document.getElementById('btn-quick-true-stereo');
+const quickStereoModeName = document.getElementById('quick-stereo-mode-name');
+const stereoStatusDot = document.getElementById('stereo-status-dot');
+
+function initTrueStereoUI() {
+  const saved = JSON.parse(localStorage.getItem('aura.stereoSettings') || '{}');
+  const mode = saved.mode || (audioEngine.crossfeedEnabled ? 'crossfeed' : 'true-stereo');
+  const width = saved.width !== undefined ? saved.width : 1.0;
+  const balance = saved.balance !== undefined ? saved.balance : 0.0;
+  const swap = !!saved.swap;
+  const invert = !!saved.invert;
+
+  audioEngine.stereoMode = mode;
+  audioEngine.stereoWidth = width;
+  audioEngine.stereoBalance = balance;
+  audioEngine.channelSwap = swap;
+  audioEngine.phaseInvertL = invert;
+
+  if (stereoWidthInput) stereoWidthInput.value = Math.round(width * 100);
+  if (stereoBalanceInput) stereoBalanceInput.value = Math.round(balance * 100);
+  if (toggleChannelSwap) toggleChannelSwap.checked = swap;
+  if (togglePhaseInvert) togglePhaseInvert.checked = invert;
+
+  updateStereoUIElements();
+
+  // Mode buttons
+  const modeButtons = [btnModeTrueStereo, btnModeCrossfeed, btnModeMono].filter(Boolean);
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetMode = btn.getAttribute('data-mode');
+      setStereoModeAction(targetMode);
+    });
+  });
+
+  // Width slider
+  if (stereoWidthInput) {
+    stereoWidthInput.addEventListener('input', (e) => {
+      const w = parseInt(e.target.value, 10) / 100;
+      audioEngine.setStereoWidth(w);
+      stereoWidthVal.textContent = w === 1.0 ? '100% (Reference)' : (w === 0 ? '0% (Mono)' : `${Math.round(w * 100)}%`);
+      saveStereoSettings();
+    });
+  }
+
+  // Balance slider
+  if (stereoBalanceInput) {
+    stereoBalanceInput.addEventListener('input', (e) => {
+      const b = parseInt(e.target.value, 10) / 100;
+      audioEngine.setStereoBalance(b);
+      if (b === 0) {
+        stereoBalanceVal.textContent = 'Center';
+      } else if (b < 0) {
+        stereoBalanceVal.textContent = `L ${Math.abs(Math.round(b * 100))}%`;
+      } else {
+        stereoBalanceVal.textContent = `R ${Math.round(b * 100)}%`;
+      }
+      saveStereoSettings();
+    });
+  }
+
+  // Channel swap
+  if (toggleChannelSwap) {
+    toggleChannelSwap.addEventListener('change', (e) => {
+      audioEngine.setChannelSwap(e.target.checked);
+      saveStereoSettings();
+      updateSignalPath();
+    });
+  }
+
+  // Phase Inversion
+  if (togglePhaseInvert) {
+    togglePhaseInvert.addEventListener('change', (e) => {
+      audioEngine.setPhaseInvert(e.target.checked);
+      saveStereoSettings();
+      updateSignalPath();
+    });
+  }
+
+  // Quick True Stereo pill button in master player bar
+  if (btnQuickTrueStereo) {
+    btnQuickTrueStereo.addEventListener('click', () => {
+      const nextMode = audioEngine.stereoMode === 'true-stereo' ? 'crossfeed' : 'true-stereo';
+      setStereoModeAction(nextMode);
+    });
+  }
+}
+
+function setStereoModeAction(mode) {
+  audioEngine.setStereoMode(mode);
+  if (toggleCrossfeed) {
+    toggleCrossfeed.checked = (mode === 'crossfeed');
+  }
+  updateStereoUIElements();
+  saveStereoSettings();
+  updateSignalPath();
+}
+
+function updateStereoUIElements() {
+  const mode = audioEngine.stereoMode;
+  [btnModeTrueStereo, btnModeCrossfeed, btnModeMono].forEach(b => {
+    if (b) b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+  });
+
+  if (stereoModeChip) {
+    if (mode === 'true-stereo') {
+      stereoModeChip.textContent = 'TRUE STEREO 2.0';
+      stereoModeChip.className = 'spec-chip gold';
+    } else if (mode === 'mono') {
+      stereoModeChip.textContent = 'MONO SUM';
+      stereoModeChip.className = 'spec-chip';
+    } else {
+      stereoModeChip.textContent = 'CROSSFEED ACTIVE';
+      stereoModeChip.className = 'spec-chip gold';
+    }
+  }
+
+  if (quickStereoModeName) {
+    quickStereoModeName.textContent = mode === 'true-stereo' ? 'True Stereo' : (mode === 'mono' ? 'Mono' : 'Crossfeed');
+  }
+  if (stereoStatusDot) {
+    stereoStatusDot.style.background = mode === 'true-stereo' ? 'var(--accent-gold)' : (mode === 'mono' ? '#94a3b8' : '#38bdf8');
+  }
+
+  if (stereoWidthVal && stereoWidthInput) {
+    const w = parseFloat(stereoWidthInput.value) / 100;
+    stereoWidthVal.textContent = w === 1.0 ? '100% (Reference)' : (w === 0 ? '0% (Mono)' : `${Math.round(w * 100)}%`);
+  }
+  if (stereoBalanceVal && stereoBalanceInput) {
+    const b = parseInt(stereoBalanceInput.value, 10);
+    stereoBalanceVal.textContent = b === 0 ? 'Center' : (b < 0 ? `L ${Math.abs(b)}%` : `R ${b}%`);
+  }
+}
+
+function saveStereoSettings() {
+  const cfg = {
+    mode: audioEngine.stereoMode,
+    width: audioEngine.stereoWidth,
+    balance: audioEngine.stereoBalance,
+    swap: audioEngine.channelSwap,
+    invert: audioEngine.phaseInvertL
+  };
+  localStorage.setItem('aura.stereoSettings', JSON.stringify(cfg));
+}
 
 // 11. Subsonic / DC Rumble Filter & Black-Background Noise Gate UI
 function initNoiseGateAndFilterUI() {
@@ -1721,6 +2026,7 @@ async function bootDspExtras() {
   initThemePersonalisation();
   await initExclusiveMode(); // must run before the AudioContext is created
   initCrossfeedUI();
+  initTrueStereoUI();
   initNoiseGateAndFilterUI();
   initLockscreenWidgetUI();
   initLibrarySearch();

@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const http = require('http');
 const { exec } = require('child_process');
+const widgetBridge = require('./widget-bridge');
 
 let mainWindow;
 let streamServer;
@@ -22,6 +23,11 @@ function writeEngineSettings(patch) {
   } catch (e) { console.error('Failed to save engine settings', e); }
   return next;
 }
+
+// Force GPU hardware acceleration and smooth scrolling/rendering
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist'); // Forces GPU acceleration even on older integrated graphics (Intel/AMD)
 
 // Best-effort WASAPI exclusive mode: Chromium opens the output endpoint exclusively on its
 // low-latency path, bypassing the Windows shared-mode mixer (and its resampling / volume curve)
@@ -198,6 +204,122 @@ function getFallbackHardwareList() {
   ];
 }
 
+let mmParseFile = null;
+async function getMusicMetadataParser() {
+  if (mmParseFile) return mmParseFile;
+  try {
+    const mm = await import('music-metadata');
+    mmParseFile = mm.parseFile;
+  } catch (err) {
+    console.error('Failed to import music-metadata', err);
+  }
+  return mmParseFile;
+}
+
+// Parse single audio file metadata
+async function parseAudioFileMetadata(fullPath) {
+  const ext = path.extname(fullPath).toLowerCase();
+  if (!AUDIO_EXTENSIONS.has(ext)) return null;
+
+  let meta = {
+    title: path.basename(fullPath, ext).replace(/[_-]/g, ' '),
+    artist: 'Aura Lossless Studio',
+    album: 'Audiophile Master Session',
+    duration: 0,
+    sampleRate: 44100,
+    bitsPerSample: 16,
+    bitrate: 0,
+    format: ext.replace('.', '').toUpperCase(),
+    path: fullPath,
+    size: 0,
+    hasCover: false,
+    coverData: null
+  };
+
+  try {
+    const stats = await fs.promises.stat(fullPath);
+    meta.size = stats.size;
+
+    const parseFile = await getMusicMetadataParser();
+    if (parseFile) {
+      const metadata = await parseFile(fullPath, { duration: true, skipCovers: false });
+      if (metadata.common) {
+        if (metadata.common.title) meta.title = metadata.common.title;
+        if (metadata.common.artist) meta.artist = metadata.common.artist;
+        if (metadata.common.album) meta.album = metadata.common.album;
+        if (metadata.common.year) meta.year = metadata.common.year;
+        if (metadata.common.picture && metadata.common.picture.length > 0) {
+          const pic = metadata.common.picture[0];
+          const picBuf = Buffer.from(pic.data);
+          meta.hasCover = true;
+          try {
+            const img = nativeImage.createFromBuffer(picBuf);
+            if (img.isEmpty()) throw new Error('empty');
+            const size = img.getSize();
+            const resized = size.width > 600 ? img.resize({ width: 600, quality: 'best' }) : img;
+            meta.coverData = `data:image/jpeg;base64,${resized.toJPEG(90).toString('base64')}`;
+          } catch (e) {
+            meta.coverData = `data:${pic.format || 'image/jpeg'};base64,${picBuf.toString('base64')}`;
+          }
+        }
+      }
+      if (metadata.format) {
+        if (metadata.format.duration) meta.duration = metadata.format.duration;
+        if (metadata.format.sampleRate) meta.sampleRate = metadata.format.sampleRate;
+        if (metadata.format.bitsPerSample) meta.bitsPerSample = metadata.format.bitsPerSample;
+        if (metadata.format.bitrate) meta.bitrate = Math.round(metadata.format.bitrate / 1000);
+        if (metadata.format.container) {
+          meta.format = metadata.format.container.toUpperCase();
+        }
+        if (ext === '.flac') {
+          meta.format = 'FLAC';
+        }
+      }
+    }
+
+    if (!meta.hasCover) {
+      const coverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'front.jpg', 'front.png', 'artwork.jpg', 'album.jpg'];
+      const fileDir = path.dirname(fullPath);
+      for (const cName of coverNames) {
+        const testCoverPath = path.join(fileDir, cName);
+        if (fs.existsSync(testCoverPath)) {
+          try {
+            const imgData = await fs.promises.readFile(testCoverPath);
+            const mime = cName.endsWith('.png') ? 'image/png' : 'image/jpeg';
+            meta.hasCover = true;
+            meta.coverData = `data:${mime};base64,${imgData.toString('base64')}`;
+            break;
+          } catch (e) {}
+        }
+      }
+    }
+  } catch (e) {
+    // Keep base metadata
+  }
+  return meta;
+}
+
+// Parse an arbitrary list of file or folder paths
+async function parseAudioFilesList(filePaths) {
+  let tracks = [];
+  for (const fp of filePaths) {
+    try {
+      if (!fs.existsSync(fp)) continue;
+      const stat = await fs.promises.stat(fp);
+      if (stat.isDirectory()) {
+        const subTracks = await scanDirectoryRecursive(fp, 5);
+        tracks = tracks.concat(subTracks);
+      } else if (stat.isFile()) {
+        const track = await parseAudioFileMetadata(fp);
+        if (track) tracks.push(track);
+      }
+    } catch (err) {
+      console.warn('Error parsing input file:', fp, err);
+    }
+  }
+  return tracks;
+}
+
 // Recursive audio scanner with metadata parsing
 async function scanDirectoryRecursive(dirPath, maxDepth = 4, currentDepth = 0) {
   let results = [];
@@ -210,15 +332,6 @@ async function scanDirectoryRecursive(dirPath, maxDepth = 4, currentDepth = 0) {
     return results;
   }
 
-  // Dynamically import music-metadata if needed
-  let parseFile;
-  try {
-    const mm = await import('music-metadata');
-    parseFile = mm.parseFile;
-  } catch (err) {
-    console.error('Failed to import music-metadata', err);
-  }
-
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
@@ -229,84 +342,8 @@ async function scanDirectoryRecursive(dirPath, maxDepth = 4, currentDepth = 0) {
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
       if (AUDIO_EXTENSIONS.has(ext)) {
-        let meta = {
-          title: path.basename(entry.name, ext).replace(/[_-]/g, ' '),
-          artist: 'Aura Lossless Studio',
-          album: 'Audiophile Master Session',
-          duration: 0,
-          sampleRate: 44100,
-          bitsPerSample: 16,
-          bitrate: 0,
-          format: ext.replace('.', '').toUpperCase(),
-          path: fullPath,
-          size: 0,
-          hasCover: false,
-          coverData: null
-        };
-
-        try {
-          const stats = await fs.promises.stat(fullPath);
-          meta.size = stats.size;
-
-          if (parseFile) {
-            const metadata = await parseFile(fullPath, { duration: true, skipCovers: false });
-            if (metadata.common) {
-              if (metadata.common.title) meta.title = metadata.common.title;
-              if (metadata.common.artist) meta.artist = metadata.common.artist;
-              if (metadata.common.album) meta.album = metadata.common.album;
-              if (metadata.common.year) meta.year = metadata.common.year;
-              if (metadata.common.picture && metadata.common.picture.length > 0) {
-                const pic = metadata.common.picture[0];
-                const picBuf = Buffer.from(pic.data);
-                meta.hasCover = true;
-                try {
-                  const img = nativeImage.createFromBuffer(picBuf);
-                  if (img.isEmpty()) throw new Error('empty');
-                  const size = img.getSize();
-                  const resized = size.width > 600 ? img.resize({ width: 600, quality: 'best' }) : img;
-                  meta.coverData = `data:image/jpeg;base64,${resized.toJPEG(90).toString('base64')}`;
-                } catch (e) {
-                  meta.coverData = `data:${pic.format || 'image/jpeg'};base64,${picBuf.toString('base64')}`;
-                }
-              }
-            }
-            if (metadata.format) {
-              if (metadata.format.duration) meta.duration = metadata.format.duration;
-              if (metadata.format.sampleRate) meta.sampleRate = metadata.format.sampleRate;
-              if (metadata.format.bitsPerSample) meta.bitsPerSample = metadata.format.bitsPerSample;
-              if (metadata.format.bitrate) meta.bitrate = Math.round(metadata.format.bitrate / 1000);
-              if (metadata.format.container) {
-                meta.format = metadata.format.container.toUpperCase();
-              }
-              // Ensure .flac files always retain canonical 'FLAC' format tag
-              if (ext === '.flac') {
-                meta.format = 'FLAC';
-              }
-            }
-          }
-
-          // If no embedded cover found, check for folder cover art image in the same folder
-          if (!meta.hasCover) {
-            const coverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'front.jpg', 'front.png', 'artwork.jpg', 'album.jpg'];
-            const fileDir = path.dirname(fullPath);
-            for (const cName of coverNames) {
-              const testCoverPath = path.join(fileDir, cName);
-              if (fs.existsSync(testCoverPath)) {
-                try {
-                  const imgData = await fs.promises.readFile(testCoverPath);
-                  const mime = cName.endsWith('.png') ? 'image/png' : 'image/jpeg';
-                  meta.hasCover = true;
-                  meta.coverData = `data:${mime};base64,${imgData.toString('base64')}`;
-                  break;
-                } catch (e) {}
-              }
-            }
-          }
-        } catch (e) {
-          // Keep default parsed metadata
-        }
-
-        results.push(meta);
+        const meta = await parseAudioFileMetadata(fullPath);
+        if (meta) results.push(meta);
       }
     }
   }
@@ -359,6 +396,24 @@ ipcMain.handle('select-music-folder', async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle('select-music-files', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile', 'multiSelections'],
+    title: 'Select Lossless Audio Files',
+    filters: [
+      { name: 'Audio Files (*.flac, *.wav, *.aiff, *.alac, *.mp3, etc.)', extensions: ['flac', 'wav', 'aiff', 'alac', 'm4a', 'mp3', 'ogg', 'aac', 'opus', 'dsf', 'dff'] },
+      { name: 'All Files (*.*)', extensions: ['*'] }
+    ]
+  });
+  if (result.canceled || result.filePaths.length === 0) return [];
+  return await parseAudioFilesList(result.filePaths);
+});
+
+ipcMain.handle('parse-audio-files', async (event, filePaths) => {
+  if (!Array.isArray(filePaths) || filePaths.length === 0) return [];
+  return await parseAudioFilesList(filePaths);
+});
+
 ipcMain.handle('scan-directory', async (event, dirPath) => {
   const targetDir = dirPath || path.join(os.homedir(), 'Music');
   return await scanDirectoryRecursive(targetDir, 5);
@@ -368,9 +423,15 @@ ipcMain.handle('open-file-location', (event, filePath) => {
   shell.showItemInFolder(filePath);
 });
 
+// Windows 11 Widget Board IPC
+ipcMain.on('widget-update-state', (event, state) => {
+  widgetBridge.updateState(state);
+});
+
 app.whenReady().then(async () => {
   await startStreamingServer();
   createWindow();
+  widgetBridge.init(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -378,6 +439,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  widgetBridge.destroy();
   if (streamServer) {
     try { streamServer.close(); } catch (e) {}
   }

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 com rescap">
+
+  <Identity
+    Name="AuraAudio.WidgetProvider"
+    Publisher="CN=AuraStudio"
+    Version="2.0.0.0" />
+
+  <Properties>
+    <DisplayName>Aura Audio Lossless Studio</DisplayName>
+    <PublisherDisplayName>Aura Studio</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+  <Applications>
+    <Application Id="AuraWidgetApp"
+      Executable="AuraWidgetProvider.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Aura Lossless Audio"
+        Description="Aura Lossless Audio Player Studio"
+        BackgroundColor="#0b0e14"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- Windows 11 Widget Board Provider Registration -->
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="com.microsoft.windows.widgets"
+            Id="AuraWidgets"
+            DisplayName="Aura Lossless Audio"
+            Description="Aura Lossless Audio Player Studio">
+            <uap3:Properties>
+              <WidgetProvider>
+                <ProviderIcons>
+                  <Icon Path="Assets\WidgetIcon.png" />
+                </ProviderIcons>
+                <Activation>
+                  <!-- COM Server Registration matching CLSID in Program.cs -->
+                  <CreateInstance ClassId="E913B00C-4A2B-4A1C-9E6D-29A61972EA10" />
+                </Activation>
+                <Definitions>
+                  <Definition Id="AuraNowPlayingWidget"
+                    DisplayName="Aura Lossless Now Playing"
+                    Description="Live track controls, high-resolution FLAC telemetry, and real-time playback for Aura Audio Studio"
+                    AllowMultiple="false">
+                    <Capabilities>
+                      <Capability>
+                        <Size>small</Size>
+                      </Capability>
+                      <Capability>
+                        <Size>medium</Size>
+                      </Capability>
+                      <Capability>
+                        <Size>large</Size>
+                      </Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetScreenshot.png" />
+                      </Screenshots>
+                      <DarkModeResources>
+                        <BackgroundColor>#0b0e14</BackgroundColor>
+                      </DarkModeResources>
+                      <LightModeResources>
+                        <BackgroundColor>#14171f</BackgroundColor>
+                      </LightModeResources>
+                    </ThemeResources>
+                  </Definition>
+                </Definitions>
+              </WidgetProvider>
+            </uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+
+        <!-- Out-Of-Process COM Server Definition -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="AuraWidgetProvider.exe" DisplayName="Aura Widget Provider COM Server">
+              <com:Class Id="E913B00C-4A2B-4A1C-9E6D-29A61972EA10" DisplayName="Aura Widget Provider Class" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>
