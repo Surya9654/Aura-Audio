@@ -1,8 +1,13 @@
-// Aura 3.0 Mobile Wi-Fi Remote Client
+// Aura 3.0 Mobile Wi-Fi Remote Client — Real-Time Engine
 (function () {
   let ws = null;
   let isConnected = false;
   let reconnectTimeout = null;
+  let isUserScrubbing = false;
+  let isUserDraggingVolume = false;
+  let volumeThrottle = null;
+  let lastStateReceivedTime = Date.now();
+
   let state = {
     title: 'Aura Lossless Studio',
     artist: 'Ready for Playback',
@@ -22,11 +27,7 @@
     stereoMode: 'true-stereo'
   };
 
-  let isUserScrubbing = false;
-  let localProgressTimer = null;
-  let lastStateReceivedTime = Date.now();
-
-  // Elements
+  // DOM Elements
   const toast = document.getElementById('connection-toast');
   const toastText = document.getElementById('toast-text');
   const statusDot = document.getElementById('status-dot');
@@ -71,7 +72,15 @@
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   }
 
-  // Connect to the WebSocket on the host
+  function updatePlayPauseIcon() {
+    if (state.isPlaying) {
+      playIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+    } else {
+      playIcon.innerHTML = '<polygon points="6 4 20 12 6 20 6 4"></polygon>';
+    }
+  }
+
+  // Connect to the WebSocket on the host with automatic retry
   function connect() {
     if (reconnectTimeout) clearTimeout(reconnectTimeout);
 
@@ -92,6 +101,8 @@
         const msg = JSON.parse(event.data);
         if (msg.type === 'state' && msg.data) {
           applyState(msg.data);
+        } else if (msg.type === 'tick' && msg.data) {
+          applyTick(msg.data);
         }
       } catch (err) {
         console.error('WS Parse Error:', err);
@@ -104,7 +115,7 @@
       statusText.textContent = 'CONNECTING...';
       toastText.textContent = 'Reconnecting to Aura Desktop...';
       toast.classList.add('visible');
-      reconnectTimeout = setTimeout(connect, 2000);
+      reconnectTimeout = setTimeout(connect, 1500);
     };
 
     ws.onerror = () => {
@@ -112,27 +123,56 @@
     };
   }
 
-  function sendCommand(action, data = {}) {
+  // High-priority command dispatcher (sends both 'command' and 'action' for 100% compatibility)
+  function sendCommand(cmd, data = {}) {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ action, ...data }));
+      ws.send(JSON.stringify({ command: cmd, action: cmd, ...data }));
     }
+  }
+
+  function applyTick(data) {
+    if (data.currentTime !== undefined && !isUserScrubbing) {
+      state.currentTime = data.currentTime;
+      lastStateReceivedTime = Date.now();
+    }
+    if (data.duration !== undefined && data.duration > 0) {
+      state.duration = data.duration;
+    }
+    if (data.isPlaying !== undefined && state.isPlaying !== data.isPlaying) {
+      state.isPlaying = data.isPlaying;
+      updatePlayPauseIcon();
+    }
+    if (data.volume !== undefined && !isUserDraggingVolume && document.activeElement !== volumeSlider) {
+      state.volume = data.volume;
+      const v = Math.round(data.volume * 100);
+      volumeSlider.value = v;
+      volumeVal.textContent = `${v}%`;
+    }
+    updateProgressUI();
   }
 
   function applyState(newState) {
     state = { ...state, ...newState };
     lastStateReceivedTime = Date.now();
 
-    // Track Meta
-    trackTitle.textContent = state.title || 'Unknown Title';
-    trackArtist.textContent = state.artist || 'Aura Lossless Studio';
-    trackAlbum.textContent = state.album || '';
+    // Track Metadata
+    if (newState.title !== undefined) trackTitle.textContent = state.title || 'Unknown Title';
+    if (newState.artist !== undefined) trackArtist.textContent = state.artist || 'Aura Lossless Studio';
+    if (newState.album !== undefined) trackAlbum.textContent = state.album || '';
 
-    // Artwork
+    // Album Artwork: avoid continuous reload if path hasn't changed
     if (state.coverUrl) {
-      albumCover.src = state.coverUrl;
+      try {
+        const resolved = new URL(state.coverUrl, location.href).href;
+        if (albumCover.src !== resolved) {
+          albumCover.src = state.coverUrl;
+        }
+      } catch (e) {
+        albumCover.src = state.coverUrl;
+      }
     }
 
-    // Badges
+    // Audio Specification Badges
     const bits = state.bitsPerSample || 16;
     const rateKhz = state.sampleRate ? (state.sampleRate / 1000).toFixed(1) : '44.1';
     badgeFormat.textContent = `${state.format || 'FLAC'} ${bits}-BIT / ${rateKhz}kHz`;
@@ -149,17 +189,14 @@
       badgeDr.style.color = '#f5d485';
     }
 
-    // Play/Pause Icon
-    if (state.isPlaying) {
-      playIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
-    } else {
-      playIcon.innerHTML = '<polygon points="6 4 20 12 6 20 6 4"></polygon>';
-    }
+    // Play / Pause Icon
+    updatePlayPauseIcon();
 
-    // Volume
-    if (state.volume !== undefined && document.activeElement !== volumeSlider) {
-      volumeSlider.value = Math.round(state.volume * 100);
-      volumeVal.textContent = `${volumeSlider.value}%`;
+    // Volume Slider (only update when user is NOT touching the slider)
+    if (state.volume !== undefined && !isUserDraggingVolume && document.activeElement !== volumeSlider) {
+      const v = Math.round(state.volume * 100);
+      volumeSlider.value = v;
+      volumeVal.textContent = `${v}%`;
     }
 
     // Stereo Mode Segments
@@ -167,7 +204,7 @@
       if (b) b.classList.toggle('active', b.getAttribute('data-mode') === state.stereoMode);
     });
 
-    // Preset
+    // Acoustic Target Presets
     if (state.activePreset) {
       const match = Array.from(presetSelector.options).find(o => 
         o.text.toLowerCase().includes(state.activePreset.toLowerCase()) || 
@@ -185,7 +222,7 @@
     let current = state.currentTime || 0;
     if (state.isPlaying) {
       const elapsedSinceUpdate = (Date.now() - lastStateReceivedTime) / 1000;
-      current = Math.min(state.duration, current + elapsedSinceUpdate);
+      current = Math.min(state.duration || 0, current + elapsedSinceUpdate);
     }
 
     const duration = state.duration || 0;
@@ -199,18 +236,21 @@
     remainingTimeEl.textContent = `-${formatDuration(rem >= 0 ? rem : 0)}`;
   }
 
-  // Smooth local timer for 60 FPS scrubber movement
+  // Silky 60 FPS interpolated progress bar loop
   function startProgressLoop() {
     updateProgressUI();
     requestAnimationFrame(startProgressLoop);
   }
 
-  // Event Listeners
+  // 1. Play / Pause with instant optimistic feedback
   btnPlayPause.addEventListener('click', () => {
     haptic(18);
+    state.isPlaying = !state.isPlaying;
+    updatePlayPauseIcon();
     sendCommand('toggle-play');
   });
 
+  // 2. Track Navigation with instant feedback
   btnPrev.addEventListener('click', () => {
     haptic(14);
     sendCommand('prev');
@@ -221,28 +261,60 @@
     sendCommand('next');
   });
 
-  // Scrubber scrubbing
+  // 3. Real-Time Scrubber Seeking
   scrubberInput.addEventListener('input', (e) => {
     isUserScrubbing = true;
     const pct = parseFloat(e.target.value);
     scrubberFill.style.width = `${pct}%`;
     const seekTime = (pct / 100) * (state.duration || 0);
     currentTimeEl.textContent = formatDuration(seekTime);
+    const rem = (state.duration || 0) - seekTime;
+    remainingTimeEl.textContent = `-${formatDuration(rem >= 0 ? rem : 0)}`;
   });
 
-  scrubberInput.addEventListener('change', (e) => {
+  const commitSeek = () => {
+    if (!isUserScrubbing) return;
     isUserScrubbing = false;
-    const pct = parseFloat(e.target.value);
+    const pct = parseFloat(scrubberInput.value);
     const seekTime = (pct / 100) * (state.duration || 0);
+    state.currentTime = seekTime;
+    lastStateReceivedTime = Date.now();
+    updateProgressUI();
     haptic(15);
     sendCommand('seek', { time: seekTime });
+  };
+
+  scrubberInput.addEventListener('change', commitSeek);
+  scrubberInput.addEventListener('pointerup', commitSeek);
+  scrubberInput.addEventListener('touchend', commitSeek);
+
+  // 4. Real-Time Volume Control
+  ['pointerdown', 'touchstart'].forEach(ev => {
+    volumeSlider.addEventListener(ev, () => {
+      isUserDraggingVolume = true;
+    });
   });
 
-  // Volume slider
+  ['pointerup', 'touchend', 'change'].forEach(ev => {
+    window.addEventListener(ev, () => {
+      if (isUserDraggingVolume) {
+        isUserDraggingVolume = false;
+        const val = parseInt(volumeSlider.value, 10);
+        sendCommand('volume', { volume: val / 100 });
+      }
+    });
+  });
+
   volumeSlider.addEventListener('input', (e) => {
+    isUserDraggingVolume = true;
     const val = parseInt(e.target.value, 10);
     volumeVal.textContent = `${val}%`;
-    sendCommand('volume', { volume: val / 100 });
+    state.volume = val / 100;
+
+    if (volumeThrottle) clearTimeout(volumeThrottle);
+    volumeThrottle = setTimeout(() => {
+      sendCommand('volume', { volume: val / 100 });
+    }, 25);
   });
 
   btnMute.addEventListener('click', () => {
@@ -251,33 +323,37 @@
       volumeSlider.dataset.prev = volumeSlider.value;
       volumeSlider.value = 0;
       volumeVal.textContent = '0%';
+      state.volume = 0;
       sendCommand('volume', { volume: 0 });
     } else {
       const restore = volumeSlider.dataset.prev || 85;
       volumeSlider.value = restore;
       volumeVal.textContent = `${restore}%`;
-      sendCommand('volume', { volume: parseInt(restore, 10) / 100 });
+      state.volume = parseInt(restore, 10) / 100;
+      sendCommand('volume', { volume: state.volume });
     }
   });
 
-  // Stereo mode switching from phone
+  // 5. Instant Stereo Mode Switching
   [segTrueStereo, segCrossfeed, segMono].forEach(btn => {
     btn.addEventListener('click', () => {
       const mode = btn.getAttribute('data-mode');
       haptic(14);
+      state.stereoMode = mode;
       [segTrueStereo, segCrossfeed, segMono].forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       sendCommand('set-stereo-mode', { mode });
     });
   });
 
-  // Acoustic preset switching from phone
+  // 6. Acoustic Target Preset Switching
   presetSelector.addEventListener('change', (e) => {
     haptic(14);
+    state.activePreset = e.target.value;
     sendCommand('set-preset', { preset: e.target.value });
   });
 
-  // Init
+  // Initialize
   connect();
   startProgressLoop();
 })();

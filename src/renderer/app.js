@@ -846,9 +846,9 @@ const fsDrMeterBadge = document.getElementById('fs-dr-meter-badge');
     }
   }
 
-  // Periodic heartbeat sync to mobile remote over Wi-Fi
+  // Periodic heartbeat sync to mobile remote over Wi-Fi (lightweight tick)
   if (typeof broadcastRemoteState === 'function' && el && el.duration > 0 && audioEngine.isPlaying) {
-    broadcastRemoteState(false);
+    broadcastRemoteState(false, true);
   }
 
   // Micro-Dynamics & Crest Factor Heatmap Timeline Processing (Switched off as of now)
@@ -2036,11 +2036,12 @@ function initLibrarySearch() {
 let activeSinkDeviceId = localStorage.getItem('aura.sinkDeviceId') || 'default';
 let activeSinkDeviceLabel = localStorage.getItem('aura.sinkDeviceLabel') || 'System Default Audio';
 let lastRemoteBroadcastTimestamp = 0;
+let lastSentCoverTrackPath = null;
 
-function broadcastRemoteState(force = false) {
+function broadcastRemoteState(force = false, isTick = false) {
   if (!window.electronAPI || !window.electronAPI.sendRemoteState) return;
   const now = Date.now();
-  if (!force && now - lastRemoteBroadcastTimestamp < 250) {
+  if (!force && now - lastRemoteBroadcastTimestamp < 100) {
     return; // throttle rapid heartbeat updates
   }
   lastRemoteBroadcastTimestamp = now;
@@ -2049,7 +2050,15 @@ function broadcastRemoteState(force = false) {
   const el = audioEngine.audioElement;
   const metrics = audioEngine.getDynamicsMetrics ? audioEngine.getDynamicsMetrics() : { crestFactorDb: 10, dynamicRating: 'BALANCED' };
 
+  // Only transfer raw heavy base64 coverData if the track path has actually changed
+  const trackPath = track ? track.path : null;
+  const coverChanged = (trackPath !== lastSentCoverTrackPath);
+  if (coverChanged) {
+    lastSentCoverTrackPath = trackPath;
+  }
+
   const remotePayload = {
+    isTick,
     title: track ? (track.title || 'Unknown Title') : 'Aura Lossless Studio',
     artist: track ? (track.artist || 'Unknown Artist') : 'Ready for Playback',
     album: track ? (track.album || 'Studio Reference') : 'Studio Reference',
@@ -2061,7 +2070,7 @@ function broadcastRemoteState(force = false) {
     bitsPerSample: track ? track.bitsPerSample : 16,
     format: track ? track.format : 'FLAC',
     hasCover: !!(track && track.hasCover),
-    coverData: track ? getTrackCover(track) : null,
+    coverData: coverChanged ? (track ? getTrackCover(track) : null) : undefined,
     dynamicRating: metrics.dynamicRating || 'BALANCED',
     crestFactorDb: metrics.crestFactorDb || 10,
     activePreset: state.activePreset ? state.activePreset.name : 'Reference',
@@ -2313,6 +2322,9 @@ function initConnectUI() {
       if (clientsCount && info && info.count !== undefined) {
         clientsCount.textContent = `${info.count} Phone${info.count === 1 ? '' : 's'} Connected`;
       }
+      if (info && info.count > 0) {
+        broadcastRemoteState(true);
+      }
     });
   }
 
@@ -2320,7 +2332,7 @@ function initConnectUI() {
   if (window.electronAPI && window.electronAPI.onRemoteCommand) {
     window.electronAPI.onRemoteCommand((action) => {
       if (!action) return;
-      const cmd = action.command;
+      const cmd = action.command || action.action;
       if (cmd === 'toggle-play') {
         btnMasterPlay.click();
       } else if (cmd === 'play') {
@@ -2360,6 +2372,9 @@ function initConnectUI() {
       }
     });
   }
+
+  // Broadcast initial state so remote server has current state immediately
+  broadcastRemoteState(true);
 
   // Initial load of connected devices
   loadConnectDevices();

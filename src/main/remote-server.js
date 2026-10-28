@@ -188,7 +188,12 @@ class AuraRemoteServer {
     this.wss = new WebSocketServer({ server: this.server, path: '/ws' });
 
     this.wss.on('connection', (ws, req) => {
+      // Enable TCP_NODELAY for sub-millisecond real-time packet delivery
+      if (ws._socket && ws._socket.setNoDelay) {
+        ws._socket.setNoDelay(true);
+      }
       this.connectedClients.add(ws);
+      console.log(`[Aura Remote]: Phone connected (${this.connectedClients.size} total active)`);
       this.notifyRendererClientCount();
 
       // Send initial state immediately upon phone connection
@@ -212,6 +217,7 @@ class AuraRemoteServer {
 
       ws.on('close', () => {
         this.connectedClients.delete(ws);
+        console.log(`[Aura Remote]: Phone disconnected (${this.connectedClients.size} remaining)`);
         this.notifyRendererClientCount();
       });
 
@@ -241,6 +247,7 @@ class AuraRemoteServer {
   // Handle incoming commands sent from the mobile phone
   handleRemoteAction(action) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    console.log('[Aura Remote]: Action received from phone:', action);
     // Dispatch action to Electron renderer (app.js)
     this.mainWindow.webContents.send('remote-command', action);
   }
@@ -249,8 +256,8 @@ class AuraRemoteServer {
   updateState(state) {
     if (!state) return;
 
-    // Check if cover data changed
-    if (state.coverData && state.coverData !== this.currentState.coverData) {
+    // Check if new cover data was provided
+    if (state.coverData) {
       try {
         if (state.coverData.startsWith('data:')) {
           const match = state.coverData.match(/^data:([^;]+);base64,(.+)$/);
@@ -263,21 +270,23 @@ class AuraRemoteServer {
       } catch (e) {
         console.error('Error processing cover data for remote:', e);
       }
-    } else if (!state.coverData && !state.hasCover) {
+    } else if (state.coverData === null && !state.hasCover) {
       this.coverBuffer = null;
       this.coverTimestamp = Date.now();
     }
 
     // Update internal state cache (strip heavy base64 to keep memory and WS light)
+    const cleanState = { ...state };
+    delete cleanState.coverData;
+
     this.currentState = {
       ...this.currentState,
-      ...state,
-      coverData: null // Omit raw base64, use URL instead
+      ...cleanState
     };
 
     // Broadcast to all connected phones
     const payload = JSON.stringify({
-      type: 'state',
+      type: cleanState.isTick ? 'tick' : 'state',
       data: {
         ...this.currentState,
         coverUrl: `/api/artwork?t=${this.coverTimestamp}`
