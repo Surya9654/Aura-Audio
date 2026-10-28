@@ -420,6 +420,20 @@ export class HighResAudioEngine {
     }
   }
 
+  async setOutputDevice(deviceId) {
+    if (this.audioElement && typeof this.audioElement.setSinkId === 'function') {
+      try {
+        await this.audioElement.setSinkId(deviceId);
+        console.log(`[AudioEngine]: Output routed to device: ${deviceId}`);
+        return true;
+      } catch (err) {
+        console.warn('setSinkId failed:', err);
+        return false;
+      }
+    }
+    return false;
+  }
+
   setVolume(volume0to1) {
     this.volume = volume0to1;
     this.applyVolume();

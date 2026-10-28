@@ -13,5 +13,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setExclusiveAudio: (enabled) => ipcRenderer.invoke('set-exclusive-audio', enabled),
   restartApp: () => ipcRenderer.invoke('restart-app'),
   updateWidgetState: (data) => ipcRenderer.send('widget-update-state', data),
-  onWidgetAction: (callback) => ipcRenderer.on('widget-action', (_, action) => callback(action))
+  onWidgetAction: (callback) => ipcRenderer.on('widget-action', (_, action) => callback(action)),
+  getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),
+  sendRemoteState: (state) => ipcRenderer.send('remote-update-state', state),
+  onRemoteCommand: (callback) => ipcRenderer.on('remote-command', (_, cmd) => callback(cmd)),
+  onRemoteClientsChanged: (callback) => ipcRenderer.on('remote-clients-changed', (_, info) => callback(info)),
+  onRemoteServerReady: (callback) => ipcRenderer.on('remote-server-ready', (_, info) => callback(info)),
+  getConnectedDevices: () => ipcRenderer.invoke('get-connected-devices')
 });

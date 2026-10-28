@@ -658,6 +658,7 @@ async function playTrackIndex(index) {
     await audioEngine.loadTrack(track);
     await audioEngine.play();
     updatePlayPauseState(true);
+    if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
   } catch (e) {
     console.error('Audio load error:', e);
   }
@@ -674,6 +675,7 @@ function updatePlayPauseState(isPlaying) {
   if (lsIcon) lsIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
   if (flsIcon) flsIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
   syncWidgetState();
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
 }
 
 // Windows 11 Native Widget Board synchronization helper
@@ -816,6 +818,7 @@ volumeSlider.addEventListener('input', (e) => {
   } else {
     volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
   }
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState();
 });
 setVolumeFill();
 
@@ -841,6 +844,11 @@ const fsDrMeterBadge = document.getElementById('fs-dr-meter-badge');
       totalTimeEl.textContent = formatDuration(el.duration);
       syncLockscreenScrubber(el.currentTime, el.duration);
     }
+  }
+
+  // Periodic heartbeat sync to mobile remote over Wi-Fi
+  if (typeof broadcastRemoteState === 'function' && el && el.duration > 0 && audioEngine.isPlaying) {
+    broadcastRemoteState(false);
   }
 
   // Micro-Dynamics & Crest Factor Heatmap Timeline Processing (Switched off as of now)
@@ -956,6 +964,7 @@ function applyPreset(preset) {
   // Highlight in place (no list rebuild → no flicker)
   document.querySelectorAll('.preset-item').forEach(c => c.classList.toggle('active', c.dataset.id === preset.id));
   updateSignalPath();
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
 }
 
 function initEQSliders() {
@@ -1761,6 +1770,7 @@ function setStereoModeAction(mode) {
   updateStereoUIElements();
   saveStereoSettings();
   updateSignalPath();
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
 }
 
 function updateStereoUIElements() {
@@ -2022,6 +2032,339 @@ function initLibrarySearch() {
   });
 }
 
+// 15. Aura 3.0 Connect: Wi-Fi Mobile Remote & Sound Output Routing Controller
+let activeSinkDeviceId = localStorage.getItem('aura.sinkDeviceId') || 'default';
+let activeSinkDeviceLabel = localStorage.getItem('aura.sinkDeviceLabel') || 'System Default Audio';
+let lastRemoteBroadcastTimestamp = 0;
+
+function broadcastRemoteState(force = false) {
+  if (!window.electronAPI || !window.electronAPI.sendRemoteState) return;
+  const now = Date.now();
+  if (!force && now - lastRemoteBroadcastTimestamp < 250) {
+    return; // throttle rapid heartbeat updates
+  }
+  lastRemoteBroadcastTimestamp = now;
+
+  const track = state.filteredTracks[state.currentTrackIndex] || state.currentTrack;
+  const el = audioEngine.audioElement;
+  const metrics = audioEngine.getDynamicsMetrics ? audioEngine.getDynamicsMetrics() : { crestFactorDb: 10, dynamicRating: 'BALANCED' };
+
+  const remotePayload = {
+    title: track ? (track.title || 'Unknown Title') : 'Aura Lossless Studio',
+    artist: track ? (track.artist || 'Unknown Artist') : 'Ready for Playback',
+    album: track ? (track.album || 'Studio Reference') : 'Studio Reference',
+    duration: el && isFinite(el.duration) && el.duration > 0 ? el.duration : (track ? track.duration : 0),
+    currentTime: el ? el.currentTime : 0,
+    isPlaying: audioEngine.isPlaying,
+    volume: audioEngine.volume !== undefined ? audioEngine.volume : 0.85,
+    sampleRate: track ? track.sampleRate : 44100,
+    bitsPerSample: track ? track.bitsPerSample : 16,
+    format: track ? track.format : 'FLAC',
+    hasCover: !!(track && track.hasCover),
+    coverData: track ? getTrackCover(track) : null,
+    dynamicRating: metrics.dynamicRating || 'BALANCED',
+    crestFactorDb: metrics.crestFactorDb || 10,
+    activePreset: state.activePreset ? state.activePreset.name : 'Reference',
+    stereoMode: audioEngine.stereoMode || 'true-stereo'
+  };
+
+  window.electronAPI.sendRemoteState(remotePayload);
+}
+
+async function loadConnectDevices() {
+  const container = document.getElementById('connect-devices-grid');
+  const activeSinkTag = document.getElementById('active-sink-tag');
+  if (!container) return;
+
+  if (activeSinkTag) {
+    activeSinkTag.textContent = `CURRENT: ${activeSinkDeviceLabel.toUpperCase()}`;
+  }
+
+  container.innerHTML = `
+    <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; grid-column: 1 / -1;">
+      Interrogating audio render endpoints and Bluetooth devices...
+    </div>
+  `;
+
+  let winDevices = { audioEndpoints: [], bluetoothDevices: [] };
+  let mediaDevices = [];
+
+  try {
+    if (window.electronAPI && window.electronAPI.getConnectedDevices) {
+      winDevices = await window.electronAPI.getConnectedDevices();
+    }
+  } catch (e) {
+    console.warn('Windows connected devices query error:', e);
+  }
+
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      const allDevs = await navigator.mediaDevices.enumerateDevices();
+      mediaDevices = allDevs.filter(d => d.kind === 'audiooutput');
+    }
+  } catch (e) {
+    console.warn('enumerateDevices error:', e);
+  }
+
+  container.innerHTML = '';
+
+  // Consolidate devices
+  const renderedList = [];
+
+  // Default system audio output
+  renderedList.push({
+    deviceId: 'default',
+    name: 'System Default Audio',
+    type: 'Windows Master Mixer',
+    iconType: 'speaker',
+    isBluetooth: false,
+    isDAC: false,
+    isDefault: true
+  });
+
+  // Media Devices from browser
+  mediaDevices.forEach(md => {
+    if (md.deviceId === 'default' || !md.label) return;
+    const isBt = /bluetooth|wireless|buds|bullets|headphone|airpod|soundbar|hands-free/i.test(md.label);
+    const isDac = /dac|spark|audiocular|fiio|topping|chord|audioquest|dongle|hifi/i.test(md.label);
+    renderedList.push({
+      deviceId: md.deviceId,
+      name: md.label,
+      type: isDac ? 'USB High-Res DAC' : (isBt ? 'Bluetooth Wireless Audio' : 'Audio Output Endpoint'),
+      iconType: isBt ? 'bluetooth' : (isDac ? 'dac' : 'speaker'),
+      isBluetooth: isBt,
+      isDAC: isDac,
+      isDefault: false
+    });
+  });
+
+  // Also include any Bluetooth / Endpoint devices discovered by Windows that may not be enumerated yet
+  if (winDevices && Array.isArray(winDevices.audioEndpoints)) {
+    winDevices.audioEndpoints.forEach(ep => {
+      const exists = renderedList.some(r => r.name.toLowerCase().includes(ep.name.toLowerCase()) || ep.name.toLowerCase().includes(r.name.toLowerCase()));
+      if (!exists && ep.name) {
+        renderedList.push({
+          deviceId: ep.id || '',
+          name: ep.name,
+          type: ep.isDAC ? 'USB High-Res DAC' : (ep.isBluetooth ? 'Bluetooth Sound Endpoint' : 'Audio Endpoint'),
+          iconType: ep.isBluetooth ? 'bluetooth' : (ep.isDAC ? 'dac' : 'speaker'),
+          isBluetooth: ep.isBluetooth,
+          isDAC: ep.isDAC,
+          isDefault: ep.isDefault || false
+        });
+      }
+    });
+  }
+
+  // Icons SVG helper
+  const getDeviceIconSvg = (iconType) => {
+    if (iconType === 'bluetooth') {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline></svg>';
+    }
+    if (iconType === 'dac') {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>';
+    }
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
+  };
+
+  renderedList.forEach(dev => {
+    const isCurrent = (dev.deviceId === activeSinkDeviceId) || (!activeSinkDeviceId && dev.isDefault);
+    const card = document.createElement('div');
+    card.className = `device-card ${isCurrent ? 'active' : ''}`;
+    card.innerHTML = `
+      <div class="device-icon-box">
+        ${getDeviceIconSvg(dev.iconType)}
+      </div>
+      <div class="device-info">
+        <div class="device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</div>
+        <div class="device-type">
+          ${dev.isBluetooth ? '<span style="color: var(--accent-cyan); font-weight: 600;">Bluetooth • </span>' : ''}
+          ${dev.isDAC ? '<span style="color: var(--accent-gold); font-weight: 600;">Hi-Res DAC • </span>' : ''}
+          ${escapeHtml(dev.type)}
+        </div>
+      </div>
+      <button class="device-action-btn">${isCurrent ? 'ACTIVE ROUTE' : 'ROUTE OUTPUT'}</button>
+    `;
+
+    const selectDevice = async () => {
+      activeSinkDeviceId = dev.deviceId;
+      activeSinkDeviceLabel = dev.name;
+      localStorage.setItem('aura.sinkDeviceId', activeSinkDeviceId);
+      localStorage.setItem('aura.sinkDeviceLabel', activeSinkDeviceLabel);
+
+      if (activeSinkTag) {
+        activeSinkTag.textContent = `CURRENT: ${dev.name.toUpperCase().slice(0, 26)}`;
+      }
+
+      // Route through AudioEngine setSinkId
+      if (dev.deviceId && dev.deviceId !== '') {
+        await audioEngine.setOutputDevice(dev.deviceId);
+      }
+
+      // Update active UI cards
+      container.querySelectorAll('.device-card').forEach(c => {
+        c.classList.remove('active');
+        const b = c.querySelector('.device-action-btn');
+        if (b) b.textContent = 'ROUTE OUTPUT';
+      });
+      card.classList.add('active');
+      const actionBtn = card.querySelector('.device-action-btn');
+      if (actionBtn) actionBtn.textContent = 'ACTIVE ROUTE';
+
+      updateSignalPath();
+    };
+
+    card.addEventListener('click', selectDevice);
+    container.appendChild(card);
+  });
+}
+
+function initConnectUI() {
+  const qrImg = document.getElementById('connect-qr-img');
+  const urlDisplay = document.getElementById('connect-url-display');
+  const serverStatus = document.getElementById('connect-server-status');
+  const clientsCount = document.getElementById('connect-clients-count');
+  const btnCopy = document.getElementById('btn-copy-remote-url');
+  const btnOpenBrowser = document.getElementById('btn-open-remote-browser');
+  const btnRescan = document.getElementById('btn-rescan-devices');
+  const btnQuickConnect = document.getElementById('btn-quick-connect');
+
+  // Quick connect button in master player bar opens Connect view
+  if (btnQuickConnect) {
+    btnQuickConnect.addEventListener('click', () => {
+      const navBtn = document.getElementById('nav-btn-connect');
+      if (navBtn) {
+        navBtn.click();
+      } else {
+        views.forEach(v => v.classList.remove('active'));
+        const connectView = document.getElementById('view-connect');
+        if (connectView) connectView.classList.add('active');
+      }
+    });
+  }
+
+  // Hook nav-btn-connect to load devices on tab activation
+  const navBtnConnect = document.getElementById('nav-btn-connect');
+  if (navBtnConnect) {
+    navBtnConnect.addEventListener('click', () => {
+      loadConnectDevices();
+    });
+  }
+
+  if (btnRescan) {
+    btnRescan.addEventListener('click', () => {
+      loadConnectDevices();
+    });
+  }
+
+  // Copy remote URL to clipboard
+  if (btnCopy) {
+    btnCopy.addEventListener('click', async () => {
+      const textToCopy = urlDisplay ? urlDisplay.textContent.trim() : '';
+      if (textToCopy) {
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          const span = btnCopy.querySelector('span');
+          if (span) {
+            const original = span.textContent;
+            span.textContent = 'Copied!';
+            setTimeout(() => { span.textContent = original; }, 2000);
+          }
+        } catch (e) {
+          console.warn('Clipboard copy error:', e);
+        }
+      }
+    });
+  }
+
+  // Open remote URL in external browser
+  if (btnOpenBrowser) {
+    btnOpenBrowser.addEventListener('click', () => {
+      const url = urlDisplay ? urlDisplay.textContent.trim() : 'http://127.0.0.1:4040';
+      window.open(url);
+    });
+  }
+
+  // Retrieve Initial Remote Server Info
+  const updateRemoteServerInfo = (info) => {
+    if (!info) return;
+    if (qrImg && info.qr) qrImg.src = info.qr;
+    if (urlDisplay && info.url) urlDisplay.textContent = info.url;
+    if (serverStatus && info.ip && info.port) {
+      serverStatus.textContent = `WI-FI SERVER: ${info.ip}:${info.port}`;
+    }
+    if (clientsCount && info.connectedClients !== undefined) {
+      clientsCount.textContent = `${info.connectedClients} Phone${info.connectedClients === 1 ? '' : 's'} Connected`;
+    }
+  };
+
+  if (window.electronAPI && window.electronAPI.getRemoteInfo) {
+    window.electronAPI.getRemoteInfo().then(info => updateRemoteServerInfo(info)).catch(e => console.warn('Remote info error:', e));
+  }
+
+  if (window.electronAPI && window.electronAPI.onRemoteServerReady) {
+    window.electronAPI.onRemoteServerReady((info) => {
+      updateRemoteServerInfo(info);
+    });
+  }
+
+  if (window.electronAPI && window.electronAPI.onRemoteClientsChanged) {
+    window.electronAPI.onRemoteClientsChanged((info) => {
+      if (clientsCount && info && info.count !== undefined) {
+        clientsCount.textContent = `${info.count} Phone${info.count === 1 ? '' : 's'} Connected`;
+      }
+    });
+  }
+
+  // Wire incoming commands sent from mobile phone via WebSocket
+  if (window.electronAPI && window.electronAPI.onRemoteCommand) {
+    window.electronAPI.onRemoteCommand((action) => {
+      if (!action) return;
+      const cmd = action.command;
+      if (cmd === 'toggle-play') {
+        btnMasterPlay.click();
+      } else if (cmd === 'play') {
+        if (!audioEngine.isPlaying) btnMasterPlay.click();
+      } else if (cmd === 'pause') {
+        if (audioEngine.isPlaying) btnMasterPlay.click();
+      } else if (cmd === 'next') {
+        btnNext.click();
+      } else if (cmd === 'prev') {
+        btnPrev.click();
+      } else if (cmd === 'seek') {
+        if (action.time !== undefined) {
+          audioEngine.seek(action.time);
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'volume') {
+        if (action.volume !== undefined) {
+          const vol = Math.max(0, Math.min(1, action.volume));
+          audioEngine.setVolume(vol);
+          volumeSlider.value = vol;
+          setVolumeFill();
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-stereo-mode') {
+        if (action.mode && typeof setStereoModeAction === 'function') {
+          setStereoModeAction(action.mode);
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-preset') {
+        if (action.preset) {
+          const found = HEADPHONE_PRESETS.find(p => p.name.toLowerCase().includes(action.preset.toLowerCase()));
+          if (found && typeof applyPreset === 'function') {
+            applyPreset(found);
+            broadcastRemoteState(true);
+          }
+        }
+      }
+    });
+  }
+
+  // Initial load of connected devices
+  loadConnectDevices();
+}
+
 async function bootDspExtras() {
   initThemePersonalisation();
   await initExclusiveMode(); // must run before the AudioContext is created
@@ -2030,8 +2373,10 @@ async function bootDspExtras() {
   initNoiseGateAndFilterUI();
   initLockscreenWidgetUI();
   initLibrarySearch();
+  initConnectUI();
 }
 bootDspExtras();
 
 initApp();
+
 

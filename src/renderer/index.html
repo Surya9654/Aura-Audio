@@ -17,7 +17,7 @@
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
       </svg>
       <span>AURA AUDIO</span>
-      <span class="titlebar-badge">Aura 2.0</span>
+      <span class="titlebar-badge">Aura 3.0</span>
     </div>
 
     <div style="display: flex; align-items: center; gap: 10px;">
@@ -51,6 +51,10 @@
         <button class="nav-item" data-view="studio">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
           <span>DSP & Acoustic Presets</span>
+        </button>
+        <button class="nav-item" data-view="connect" id="nav-btn-connect">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          <span>Connect</span>
         </button>
         <button class="nav-item" data-view="dac">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
@@ -522,6 +526,102 @@
           </div>
         </div>
       </section>
+
+      <!-- 4. Aura Connect (Wi-Fi Mobile Remote & Sound Output Endpoints) -->
+      <section class="view-panel" id="view-connect">
+        <div class="view-header">
+          <div class="view-title-group">
+            <h1>Aura Connect</h1>
+            <p>Wi-Fi Mobile Remote Controller, Audio Output Routing, and Connected Bluetooth Devices.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-apple" id="btn-rescan-devices">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+              <span>Rescan Devices</span>
+            </button>
+            <button class="btn-apple btn-apple-primary" id="btn-open-remote-browser">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              <span>Open Remote in Browser</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- 1. Wi-Fi Mobile Remote Card (0.0.0.0:4040) -->
+          <div class="connect-remote-card">
+            <div class="connect-qr-col">
+              <div class="qr-frame">
+                <img id="connect-qr-img" src="" alt="Scan QR Code to Connect">
+                <div class="qr-glow"></div>
+              </div>
+              <div class="qr-caption">Scan with iPhone or Android camera</div>
+            </div>
+
+            <div class="connect-info-col">
+              <div class="connect-badge-row">
+                <span class="spec-chip gold" id="connect-server-status">WI-FI SERVER: 0.0.0.0:4040</span>
+                <span class="spec-chip" id="connect-clients-count">0 Phones Connected</span>
+              </div>
+              <h2 class="connect-title">Aura 3.0 Mobile Remote Controller</h2>
+              <p class="connect-desc">
+                Control bit-perfect lossless playback, seek tracks with 60 FPS Dynamic Range waveforms, adjust volume, and switch True Stereo / Acoustic targets directly from your phone on the local Wi-Fi network. Zero installation required.
+              </p>
+
+              <div class="connect-url-box">
+                <span class="connect-url-label">Network URL:</span>
+                <code class="connect-url-text" id="connect-url-display">http://127.0.0.1:4040</code>
+                <button class="btn-copy-url" id="btn-copy-remote-url" title="Copy Remote URL to Clipboard">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <span>Copy</span>
+                </button>
+              </div>
+
+              <div class="connect-features-grid">
+                <div class="connect-feat-item">
+                  <div class="connect-feat-dot"></div>
+                  <div>
+                    <strong>Low-Latency WebSockets</strong>
+                    <p>&lt;15ms responsive bi-directional sync</p>
+                  </div>
+                </div>
+                <div class="connect-feat-item">
+                  <div class="connect-feat-dot"></div>
+                  <div>
+                    <strong>True Stereo &amp; Presets</strong>
+                    <p>Switch acoustic targets from your couch</p>
+                  </div>
+                </div>
+                <div class="connect-feat-item">
+                  <div class="connect-feat-dot"></div>
+                  <div>
+                    <strong>iOS &amp; Android PWA</strong>
+                    <p>Tap "Add to Home Screen" for native feel</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Windows Sound Output Endpoints & Bluetooth Devices -->
+          <div class="signal-path" style="padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="margin: 0; font-size: 16px;">Sound Output Endpoints &amp; Bluetooth Devices</h3>
+                <p style="margin: 4px 0 0 0; font-size: 12.5px; color: var(--text-muted);">
+                  Windows detected audio render endpoints, soundbars, Bluetooth headphones, and USB DACs. Select an endpoint to route playback directly.
+                </p>
+              </div>
+              <span class="spec-chip gold" id="active-sink-tag">CURRENT: DEFAULT</span>
+            </div>
+
+            <div class="device-grid" id="connect-devices-grid">
+              <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                Detecting Windows audio endpoints &amp; Bluetooth devices...
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -581,6 +681,11 @@
       <button class="btn-ctrl" id="btn-quick-preset" title="Active Acoustic Target" style="font-size: 12px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
         <span id="quick-preset-name">Reference</span>
+      </button>
+
+      <button class="btn-ctrl" id="btn-quick-connect" title="Aura Connect: Wi-Fi Remote & Devices" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(229, 185, 95, 0.28); background: rgba(229, 185, 95, 0.08);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+        <span id="quick-connect-label">Connect</span>
       </button>
 
       <div class="volume-slider-group">

@@ -5,6 +5,7 @@ const os = require('os');
 const http = require('http');
 const { exec } = require('child_process');
 const widgetBridge = require('./widget-bridge');
+const remoteServer = require('./remote-server');
 
 let mainWindow;
 let streamServer;
@@ -423,15 +424,100 @@ ipcMain.handle('open-file-location', (event, filePath) => {
   shell.showItemInFolder(filePath);
 });
 
+// Windows Audio Endpoints & Bluetooth Devices Detection (Aura Connect)
+function getWindowsAudioEndpointsAndBluetooth() {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') {
+      resolve({ outputs: [], bluetooth: [] });
+      return;
+    }
+
+    const psCommand = `
+      $endpoints = Get-PnpDevice -Class AudioEndpoint | Select-Object FriendlyName, Status, InstanceId | ConvertTo-Json -Compress
+      $bluetooth = Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName, Status, InstanceId | ConvertTo-Json -Compress
+      [PSCustomObject]@{ Endpoints = $endpoints; Bluetooth = $bluetooth } | ConvertTo-Json -Compress
+    `.replace(/\r?\n/g, ' ');
+
+    exec(`powershell -NoProfile -Command "${psCommand}"`, { maxBuffer: 1024 * 1024 * 5 }, (error, stdout) => {
+      if (error || !stdout.trim()) {
+        resolve({ outputs: [], bluetooth: [] });
+        return;
+      }
+      try {
+        const parsed = JSON.parse(stdout);
+        let epList = [];
+        let btList = [];
+        try { epList = JSON.parse(parsed.Endpoints); } catch (e) {}
+        try { btList = JSON.parse(parsed.Bluetooth); } catch (e) {}
+        if (!Array.isArray(epList)) epList = epList ? [epList] : [];
+        if (!Array.isArray(btList)) btList = btList ? [btList] : [];
+
+        // Filter output endpoints ({0.0.0. represents audio render/playback outputs)
+        const outputs = epList
+          .filter(e => e.InstanceId && e.InstanceId.includes('{0.0.0.'))
+          .map(e => {
+            const name = e.FriendlyName || 'Audio Output';
+            const isBt = /bluetooth|wireless|buds|soundbar|hands-free|wh-|airpods/i.test(name) || (e.InstanceId && e.InstanceId.includes('BTH'));
+            const isDac = /dac|usb|fiio|topping|schiit|chord|audiocular|ab13x|focusrite/i.test(name);
+            return {
+              name,
+              id: e.InstanceId,
+              status: e.Status || 'Unknown',
+              isActive: e.Status === 'OK',
+              type: isDac ? 'Hi-Res Lossless DAC' : (isBt ? 'Bluetooth Audio' : 'Internal Speakers / Chipset'),
+              icon: isBt ? 'bluetooth' : (isDac ? 'dac' : 'speaker')
+            };
+          });
+
+        // Filter distinct paired / connected Bluetooth devices
+        const seen = new Set();
+        const bluetooth = btList
+          .filter(b => {
+            const name = b.FriendlyName || '';
+            const skip = /generic attribute|generic access|transport|radio|adapter|module|service|nap/i.test(name);
+            if (skip || seen.has(name.toLowerCase())) return false;
+            seen.add(name.toLowerCase());
+            return true;
+          })
+          .map(b => ({
+            name: b.FriendlyName,
+            status: b.Status,
+            isConnected: b.Status === 'OK',
+            id: b.InstanceId
+          }));
+
+        resolve({ outputs, bluetooth });
+      } catch (e) {
+        console.error('Error parsing endpoints:', e);
+        resolve({ outputs: [], bluetooth: [] });
+      }
+    });
+  });
+}
+
 // Windows 11 Widget Board IPC
 ipcMain.on('widget-update-state', (event, state) => {
   widgetBridge.updateState(state);
+});
+
+// Aura 3.0 Mobile Wi-Fi Remote (Connect) IPC
+ipcMain.handle('get-remote-info', () => {
+  return remoteServer.getServerInfo();
+});
+
+ipcMain.on('remote-update-state', (event, state) => {
+  remoteServer.updateState(state);
+});
+
+ipcMain.handle('get-connected-devices', async () => {
+  return await getWindowsAudioEndpointsAndBluetooth();
 });
 
 app.whenReady().then(async () => {
   await startStreamingServer();
   createWindow();
   widgetBridge.init(mainWindow);
+  remoteServer.start(mainWindow, 4040);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -440,6 +526,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   widgetBridge.destroy();
+  remoteServer.stop();
   if (streamServer) {
     try { streamServer.close(); } catch (e) {}
   }

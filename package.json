@@ -21,7 +21,9 @@
   "license": "MIT",
   "dependencies": {
     "lucide": "^1.61.0",
-    "music-metadata": "^12.3.0"
+    "music-metadata": "^12.3.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "electron": "^45.0.0",

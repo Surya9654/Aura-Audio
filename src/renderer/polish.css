@@ -1098,4 +1098,281 @@ img.track-thumb { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
   margin: 0;
 }
 
+/* ==========================================================================
+   Aura Connect View (Wi-Fi Mobile Remote & Sound Output Endpoints)
+   ========================================================================== */
+.connect-remote-card {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.connect-remote-card::before {
+  content: '';
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, var(--accent-gold-glow) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.connect-qr-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.qr-frame {
+  width: 190px;
+  height: 190px;
+  background: #f5d485;
+  border: 2px solid var(--accent-gold);
+  border-radius: 18px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 30px var(--accent-gold-glow), 0 0 20px rgba(229, 185, 95, 0.2);
+  position: relative;
+}
+
+.qr-frame img {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  display: block;
+}
+
+.qr-caption {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.connect-info-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.connect-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connect-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.connect-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.connect-url-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.connect-url-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.connect-url-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent-gold);
+}
+
+.btn-copy-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+
+.btn-copy-url:hover {
+  background: var(--accent-gradient-master);
+  color: var(--accent-contrast-text);
+  border-color: var(--accent-gold);
+}
+
+.connect-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-glass);
+}
+
+.connect-feat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.connect-feat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  margin-top: 5px;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px var(--accent-gold-glow);
+}
+
+.connect-feat-item strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.connect-feat-item p {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+/* Device Grid (Audio Endpoints & Bluetooth) */
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.device-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  transition: all 0.25s var(--ease-out);
+}
+
+.device-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.device-card.active {
+  background: linear-gradient(135deg, rgba(229, 185, 95, 0.12), rgba(255, 255, 255, 0.02));
+  border-color: var(--accent-gold);
+  box-shadow: 0 4px 20px var(--accent-gold-glow-subtle), inset 0 0 0 1px var(--accent-gold);
+}
+
+.device-icon-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-glass);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.device-card.active .device-icon-box {
+  background: var(--accent-gradient-master);
+  color: var(--accent-contrast-text);
+  border-color: transparent;
+}
+
+.device-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-type {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.device-action-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-glass);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s var(--ease-out);
+}
+
+.device-action-btn:hover {
+  background: var(--accent-gradient-master);
+  color: var(--accent-contrast-text);
+  border-color: var(--accent-gold);
+}
+
+.device-card.active .device-action-btn {
+  background: var(--accent-gold);
+  color: #07090e;
+  border-color: var(--accent-gold);
+  cursor: default;
+}
+
+
 
