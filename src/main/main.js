@@ -509,6 +509,10 @@ ipcMain.on('remote-update-state', (event, state) => {
   remoteServer.updateState(state);
 });
 
+ipcMain.on('remote-update-library', (event, libraryTracks) => {
+  remoteServer.updateLibrary(libraryTracks);
+});
+
 ipcMain.handle('get-connected-devices', async () => {
   return await getWindowsAudioEndpointsAndBluetooth();
 });

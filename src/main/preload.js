@@ -19,5 +19,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRemoteCommand: (callback) => ipcRenderer.on('remote-command', (_, cmd) => callback(cmd)),
   onRemoteClientsChanged: (callback) => ipcRenderer.on('remote-clients-changed', (_, info) => callback(info)),
   onRemoteServerReady: (callback) => ipcRenderer.on('remote-server-ready', (_, info) => callback(info)),
+  sendRemoteLibrary: (tracks) => ipcRenderer.send('remote-update-library', tracks),
   getConnectedDevices: () => ipcRenderer.invoke('get-connected-devices')
 });

@@ -36,6 +36,8 @@ class AuraRemoteServer {
     this.coverMime = 'image/jpeg';
     this.coverTimestamp = Date.now();
     this.qrDataUrl = '';
+    this.currentLibrary = [];
+    this.coverCache = new Map();
   }
 
   // Detect the primary Wi-Fi / LAN IPv4 address of this machine
@@ -114,6 +116,89 @@ class AuraRemoteServer {
         // Don't duplicate full base64 in state JSON; provide artwork URL endpoint
         const stateCopy = { ...this.currentState, coverUrl: `/api/artwork?t=${this.coverTimestamp}` };
         res.end(JSON.stringify(stateCopy));
+        return;
+      }
+
+      // 1b. API: Music Library
+      if (pathname === '/api/library') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          tracks: this.currentLibrary,
+          count: this.currentLibrary.length
+        }));
+        return;
+      }
+
+      // 1c. API: Track Artwork On-Demand
+      if (pathname === '/api/track-art') {
+        const filePath = parsedUrl.searchParams.get('path');
+        const indexStr = parsedUrl.searchParams.get('index');
+
+        let targetTrack = null;
+        if (filePath) {
+          targetTrack = this.currentLibrary.find(t => t.path === filePath);
+        } else if (indexStr !== null) {
+          const idx = parseInt(indexStr, 10);
+          if (!isNaN(idx) && this.currentLibrary[idx]) {
+            targetTrack = this.currentLibrary[idx];
+          }
+        }
+
+        const fallback = () => {
+          const emptyGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+          res.writeHead(200, { 'Content-Type': 'image/gif' });
+          res.end(emptyGif);
+        };
+
+        if (targetTrack && targetTrack.path) {
+          if (this.coverCache.has(targetTrack.path)) {
+            const cached = this.coverCache.get(targetTrack.path);
+            res.writeHead(200, {
+              'Content-Type': cached.mime,
+              'Content-Length': cached.buffer.length,
+              'Cache-Control': 'public, max-age=86400'
+            });
+            res.end(cached.buffer);
+            return;
+          }
+
+          if (this.currentState && this.currentState.path === targetTrack.path && this.coverBuffer) {
+            res.writeHead(200, {
+              'Content-Type': this.coverMime,
+              'Content-Length': this.coverBuffer.length,
+              'Cache-Control': 'public, max-age=86400'
+            });
+            res.end(this.coverBuffer);
+            return;
+          }
+
+          try {
+            const dir = path.dirname(targetTrack.path);
+            const coverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'front.jpg', 'front.png', 'artwork.jpg', 'album.jpg'];
+            let foundImg = null;
+            let foundMime = 'image/jpeg';
+            for (const cn of coverNames) {
+              const testP = path.join(dir, cn);
+              if (fs.existsSync(testP)) {
+                foundImg = fs.readFileSync(testP);
+                foundMime = cn.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                break;
+              }
+            }
+            if (foundImg) {
+              this.coverCache.set(targetTrack.path, { mime: foundMime, buffer: foundImg });
+              res.writeHead(200, {
+                'Content-Type': foundMime,
+                'Content-Length': foundImg.length,
+                'Cache-Control': 'public, max-age=86400'
+              });
+              res.end(foundImg);
+              return;
+            }
+          } catch (e) {}
+        }
+
+        fallback();
         return;
       }
 
@@ -206,6 +291,14 @@ class AuraRemoteServer {
       };
       ws.send(JSON.stringify(initialPayload));
 
+      // Send current library upon phone connection
+      if (this.currentLibrary && this.currentLibrary.length > 0) {
+        ws.send(JSON.stringify({
+          type: 'library',
+          data: this.currentLibrary
+        }));
+      }
+
       ws.on('message', (message) => {
         try {
           const action = JSON.parse(message.toString());
@@ -291,6 +384,23 @@ class AuraRemoteServer {
         ...this.currentState,
         coverUrl: `/api/artwork?t=${this.coverTimestamp}`
       }
+    });
+
+    for (const client of this.connectedClients) {
+      if (client.readyState === 1) { // WebSocket.OPEN
+        client.send(payload);
+      }
+    }
+  }
+
+  updateLibrary(tracks) {
+    if (!Array.isArray(tracks)) return;
+    this.currentLibrary = tracks;
+    console.log(`[Aura Remote]: Synced library with ${tracks.length} track(s)`);
+
+    const payload = JSON.stringify({
+      type: 'library',
+      data: this.currentLibrary
     });
 
     for (const client of this.connectedClients) {

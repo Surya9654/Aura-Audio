@@ -380,6 +380,11 @@ function addTracks(newTracks) {
       state.currentTrackIndex = newIdx;
     }
   }
+
+  // Sync library immediately to mobile remote
+  if (typeof broadcastRemoteLibrary === 'function') {
+    broadcastRemoteLibrary();
+  }
 }
 
 async function scanFolder(folderPath) {
@@ -468,6 +473,9 @@ function loadSampleAudiophileShowcase() {
 
   state.tracks = sampleTracks.map(t => ({ ...t, isSample: true }));
   applyTrackFilter();
+  if (typeof broadcastRemoteLibrary === 'function') {
+    broadcastRemoteLibrary();
+  }
 }
 
 function renderTrackList() {
@@ -1115,11 +1123,13 @@ async function initApp() {
   updateSignalPath();
   syncWidgetState();
 
-  // Auto-scan prioritized music folders (FLAC_files, Music, etc.) and user profile plus saved folders
+  // Auto-scan prioritized music folders (FLAC_files, Downloads, Desktop, Music, etc.)
   try {
     const sys = await window.electronAPI.getSystemInfo();
     const prioritizedRoots = [
       sys.userHome + '\\FLAC_files',
+      sys.userHome + '\\Downloads',
+      sys.userHome + '\\Desktop',
       sys.musicDir,
       sys.appRoot + '\\demo_lossless',
       ...getSavedFolders()
@@ -1142,9 +1152,11 @@ async function initApp() {
     } else {
       loadSampleAudiophileShowcase();
     }
+    broadcastRemoteLibrary();
   } catch (e) {
     console.error('Boot scan error:', e);
     loadSampleAudiophileShowcase();
+    broadcastRemoteLibrary();
   }
 }
 
@@ -2074,10 +2086,30 @@ function broadcastRemoteState(force = false, isTick = false) {
     dynamicRating: metrics.dynamicRating || 'BALANCED',
     crestFactorDb: metrics.crestFactorDb || 10,
     activePreset: state.activePreset ? state.activePreset.name : 'Reference',
-    stereoMode: audioEngine.stereoMode || 'true-stereo'
+    stereoMode: audioEngine.stereoMode || 'true-stereo',
+    trackPath: track ? track.path : ''
   };
 
   window.electronAPI.sendRemoteState(remotePayload);
+}
+
+function broadcastRemoteLibrary() {
+  if (!window.electronAPI || !window.electronAPI.sendRemoteLibrary) return;
+  const list = (state.tracks || []).map((t, index) => ({
+    index,
+    title: t.title || 'Unknown Title',
+    artist: t.artist || 'Unknown Artist',
+    album: t.album || '',
+    duration: t.duration || 0,
+    format: t.format || 'FLAC',
+    bitsPerSample: t.bitsPerSample || 16,
+    sampleRate: t.sampleRate || 44100,
+    bitrate: t.bitrate,
+    path: t.path || '',
+    hasCover: !!t.hasCover,
+    isSample: !!t.isSample
+  }));
+  window.electronAPI.sendRemoteLibrary(list);
 }
 
 async function loadConnectDevices() {
@@ -2324,6 +2356,7 @@ function initConnectUI() {
       }
       if (info && info.count > 0) {
         broadcastRemoteState(true);
+        broadcastRemoteLibrary();
       }
     });
   }
@@ -2369,12 +2402,33 @@ function initConnectUI() {
             broadcastRemoteState(true);
           }
         }
+      } else if (cmd === 'play-track' || cmd === 'play-index') {
+        let targetIndex = -1;
+        if (action.path) {
+          targetIndex = state.filteredTracks.findIndex(t => t.path && t.path.toLowerCase() === action.path.toLowerCase());
+          if (targetIndex === -1) {
+            state.searchQuery = '';
+            state.currentFilter = 'ALL';
+            applyTrackFilter();
+            targetIndex = state.filteredTracks.findIndex(t => t.path && t.path.toLowerCase() === action.path.toLowerCase());
+          }
+        }
+        if (targetIndex === -1 && action.index !== undefined && action.index >= 0) {
+          targetIndex = action.index;
+        }
+        if (targetIndex >= 0 && targetIndex < state.filteredTracks.length) {
+          playTrackIndex(targetIndex);
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'rescan-library') {
+        initApp();
       }
     });
   }
 
-  // Broadcast initial state so remote server has current state immediately
+  // Broadcast initial state and full library so remote server is immediately populated
   broadcastRemoteState(true);
+  broadcastRemoteLibrary();
 
   // Initial load of connected devices
   loadConnectDevices();
