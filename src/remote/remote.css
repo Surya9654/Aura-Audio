@@ -551,6 +551,145 @@ body {
   box-shadow: 0 2px 8px var(--accent-gold-glow);
 }
 
+.stereo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stereo-header-row {
+  margin-bottom: 2px;
+}
+
+.stereo-live-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: rgba(229, 185, 95, 0.14);
+  border: 1px solid var(--border-gold);
+  color: var(--accent-gold-light);
+}
+
+.stereo-grid-control {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+  padding: 3px;
+  gap: 4px;
+}
+
+.stereo-grid-control .segment-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 4px;
+  border-radius: 7px;
+}
+
+.seg-main {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.seg-sub {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.72;
+  line-height: 1.1;
+}
+
+.segment-btn.active .seg-sub {
+  opacity: 0.9;
+}
+
+.stereo-mode-desc {
+  font-size: 11.5px;
+  line-height: 1.38;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.28);
+  border-left: 2px solid var(--accent-gold);
+  padding: 7px 10px;
+  border-radius: 4px 8px 8px 4px;
+}
+
+.stereo-fine-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stereo-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stereo-slider-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 72px;
+}
+
+.stereo-mini-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.14);
+  outline: none;
+}
+
+.stereo-mini-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  box-shadow: 0 0 8px var(--accent-gold-glow);
+  cursor: pointer;
+}
+
+.stereo-slider-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-gold-light);
+  min-width: 44px;
+  text-align: right;
+}
+
+.stereo-swap-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-glass);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s var(--ease-out);
+}
+
+.stereo-swap-btn.active {
+  background: rgba(229, 185, 95, 0.2);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-light);
+  box-shadow: 0 0 10px var(--accent-gold-glow);
+}
+
 .sheet-select {
   flex: 1;
   max-width: 210px;

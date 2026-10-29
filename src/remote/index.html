@@ -126,14 +126,47 @@
       <section class="audiophile-sheet">
         <div class="sheet-title">STUDIO ARCHITECTURE &amp; TARGETS</div>
         
-        <!-- True Stereo Mode Selector -->
-        <div class="sheet-card">
-          <div class="sheet-row">
-            <span class="sheet-label">Stereo Mode</span>
-            <div class="segmented-control" id="stereo-mode-selector">
-              <button class="segment-btn active" data-mode="true-stereo" id="seg-true-stereo">True Stereo</button>
-              <button class="segment-btn" data-mode="crossfeed" id="seg-crossfeed">Crossfeed</button>
-              <button class="segment-btn" data-mode="mono" id="seg-mono">Mono</button>
+        <!-- Stereo & Soundstage Architecture Card -->
+        <div class="sheet-card stereo-card">
+          <div class="sheet-row stereo-header-row">
+            <span class="sheet-label">Stereo &amp; Soundstage</span>
+            <span class="stereo-live-pill" id="stereo-live-pill">DIRECT 2.0</span>
+          </div>
+
+          <div class="segmented-control stereo-grid-control" id="stereo-mode-selector">
+            <button class="segment-btn active" data-mode="true-stereo" id="seg-true-stereo">
+              <span class="seg-main">Direct 2.0</span>
+              <span class="seg-sub">Reference</span>
+            </button>
+            <button class="segment-btn" data-mode="wide" id="seg-wide">
+              <span class="seg-main">Wide 3D</span>
+              <span class="seg-sub">Soundstage</span>
+            </button>
+            <button class="segment-btn" data-mode="crossfeed" id="seg-crossfeed">
+              <span class="seg-main">Speaker</span>
+              <span class="seg-sub">Crossfeed</span>
+            </button>
+            <button class="segment-btn" data-mode="mono" id="seg-mono">
+              <span class="seg-main">Mono</span>
+              <span class="seg-sub">L+R Sum</span>
+            </button>
+          </div>
+
+          <div class="stereo-mode-desc" id="stereo-mode-desc">
+            Unaltered discrete Left &amp; Right channels with 100% studio separation.
+          </div>
+
+          <div class="stereo-fine-controls">
+            <div class="stereo-slider-row">
+              <span class="stereo-slider-label">Stage Width</span>
+              <input type="range" class="stereo-mini-slider" id="remote-stereo-width" min="0" max="150" step="5" value="100">
+              <span class="stereo-slider-val" id="remote-stereo-width-val">100%</span>
+            </div>
+            <div class="stereo-slider-row">
+              <span class="stereo-slider-label">L/R Balance</span>
+              <input type="range" class="stereo-mini-slider" id="remote-stereo-balance" min="-100" max="100" step="5" value="0">
+              <span class="stereo-slider-val" id="remote-stereo-balance-val">Center</span>
+              <button type="button" class="stereo-swap-btn" id="remote-channel-swap" title="Swap Left and Right channels">Swap L↔R</button>
             </div>
           </div>
         </div>
@@ -143,15 +176,16 @@
           <div class="sheet-row">
             <span class="sheet-label">Acoustic Target</span>
             <select class="sheet-select" id="preset-selector">
-              <option value="reference">Audiophile Reference (Flat)</option>
-              <option value="airpods-max">Apple AirPods Max</option>
-              <option value="sony-xm5">Sony WH-1000XM5 / XM4</option>
-              <option value="hd650">Sennheiser HD 600 / HD 650</option>
-              <option value="hd560s">Sennheiser HD 560S</option>
-              <option value="m50x">Audio-Technica ATH-M50x</option>
-              <option value="moondrop">Moondrop IEM Target</option>
-              <option value="kz-iem">KZ / Chi-Fi Balanced Armature</option>
-              <option value="warm-tube">Warm Tube &amp; Vinyl</option>
+              <option value="flat_reference">Audiophile Reference (Flat)</option>
+              <option value="airpods_max">Apple AirPods Max</option>
+              <option value="sony_wh1000xm5">Sony WH-1000XM5 / XM4</option>
+              <option value="sennheiser_hd600">Sennheiser HD 600 / HD 650</option>
+              <option value="sennheiser_hd560s">Sennheiser HD 560S</option>
+              <option value="ath_m50x">Audio-Technica ATH-M50x</option>
+              <option value="moondrop_aria_blessing">Moondrop IEM Target</option>
+              <option value="kz_zsn_pro">KZ / Chi-Fi Balanced Armature</option>
+              <option value="hifiman_sundara">HIFIMAN Sundara / Ananda</option>
+              <option value="warm_analog_tube">Warm Tube &amp; Vinyl</option>
             </select>
           </div>
         </div>

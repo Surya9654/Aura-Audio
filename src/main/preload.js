@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateWidgetState: (data) => ipcRenderer.send('widget-update-state', data),
   onWidgetAction: (callback) => ipcRenderer.on('widget-action', (_, action) => callback(action)),
   getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),
+  selectRemoteAdapter: (ip) => ipcRenderer.invoke('select-remote-adapter', ip),
   sendRemoteState: (state) => ipcRenderer.send('remote-update-state', state),
   onRemoteCommand: (callback) => ipcRenderer.on('remote-command', (_, cmd) => callback(cmd)),
   onRemoteClientsChanged: (callback) => ipcRenderer.on('remote-clients-changed', (_, info) => callback(info)),

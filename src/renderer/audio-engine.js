@@ -25,7 +25,7 @@ export class HighResAudioEngine {
     this.exclusiveMode = false; // low-latency path required by Chromium's WASAPI exclusive mode
 
     // True Stereo & Soundstage Architecture
-    this.stereoMode = 'true-stereo'; // 'true-stereo' (Discrete 2.0 unadulterated reference) | 'crossfeed' | 'mono'
+    this.stereoMode = 'true-stereo'; // 'true-stereo' (Direct 2.0 Reference) | 'wide' (Expanded 3D Stage) | 'crossfeed' (Speaker Stage) | 'mono' (Center Sum)
     this.stereoBalance = 0.0;        // -1.0 (Left) to +1.0 (Right), 0.0 = Dead Center
     this.stereoWidth = 1.0;          // 1.0 = 100% True Stereo reference, 0.0 = Mono, 1.5 = Wide
     this.channelSwap = false;        // Swap L <-> R channels
@@ -144,8 +144,10 @@ export class HighResAudioEngine {
     this.sampleRate = this.audioContext.sampleRate;
   }
 
-  // Crossfeed: each ear gets its own channel (attenuated) plus a low-passed, slightly delayed
-  // copy of the opposite channel, emulating the acoustic crosstalk of loudspeakers.
+  // Crossfeed (bs2b binaural speaker simulation):
+  // Each ear receives its own direct channel at full high-frequency clarity (with a compensated low-shelf
+  // cut below fcut) plus a low-passed, 0.32ms-delayed feed from the opposite channel, emulating studio
+  // monitors in a room without muffling treble or dropping overall loudness.
   buildCrossfeed() {
     const ctx = this.audioContext;
     const input = ctx.createGain();
@@ -157,14 +159,25 @@ export class HighResAudioEngine {
     const merger = ctx.createChannelMerger(2);
     input.connect(splitter);
 
-    const directL = ctx.createGain();
-    const directR = ctx.createGain();
+    const makeDirect = () => {
+      const shelf = ctx.createBiquadFilter();
+      shelf.type = 'lowshelf';
+      shelf.frequency.value = 700;
+      shelf.gain.value = -3.0;
+      const gain = ctx.createGain();
+      gain.gain.value = 1.0;
+      shelf.connect(gain);
+      return { shelf, gain };
+    };
+    const directL = makeDirect();
+    const directR = makeDirect();
+
     const makeFeed = () => {
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.Q.value = 0.5;
+      lp.Q.value = 0.6;
       const delay = ctx.createDelay(0.01);
-      delay.delayTime.value = 0.0003; // ~0.3 ms interaural time difference
+      delay.delayTime.value = 0.00032; // ~0.32 ms interaural time difference (speaker angle ~30 deg)
       const gain = ctx.createGain();
       lp.connect(delay);
       delay.connect(gain);
@@ -173,14 +186,14 @@ export class HighResAudioEngine {
     const feedLtoR = makeFeed();
     const feedRtoL = makeFeed();
 
-    splitter.connect(directL, 0);
-    splitter.connect(directR, 1);
+    splitter.connect(directL.shelf, 0);
+    splitter.connect(directR.shelf, 1);
     splitter.connect(feedLtoR.lp, 0);
     splitter.connect(feedRtoL.lp, 1);
 
-    directL.connect(merger, 0, 0);
+    directL.gain.connect(merger, 0, 0);
     feedRtoL.gain.connect(merger, 0, 0);
-    directR.connect(merger, 0, 1);
+    directR.gain.connect(merger, 0, 1);
     feedLtoR.gain.connect(merger, 0, 1);
     merger.connect(output);
 
@@ -193,13 +206,22 @@ export class HighResAudioEngine {
     const p = CROSSFEED_PROFILES[this.crossfeedProfile] || CROSSFEED_PROFILES.bauer;
     const t = this.audioContext.currentTime;
     const cross = Math.pow(10, -p.feedDb / 20) * this.crossfeedAmount;
-    const direct = 1 / (1 + cross);
+    // Preserve 0 dB high-frequency clarity on the direct path; only attenuate low frequencies (< fcut)
+    // by the low-frequency mono sum factor so bass stays tight and level-matched.
+    const lowFreqDirect = 1 / (1 + cross);
+    const lowShelfDb = 20 * Math.log10(Math.max(0.25, lowFreqDirect));
     const cf = this.crossfeed;
-    cf.directL.gain.setTargetAtTime(direct, t, 0.03);
-    cf.directR.gain.setTargetAtTime(direct, t, 0.03);
+
+    cf.directL.shelf.frequency.setTargetAtTime(p.fcut, t, 0.03);
+    cf.directR.shelf.frequency.setTargetAtTime(p.fcut, t, 0.03);
+    cf.directL.shelf.gain.setTargetAtTime(lowShelfDb, t, 0.03);
+    cf.directR.shelf.gain.setTargetAtTime(lowShelfDb, t, 0.03);
+    cf.directL.gain.gain.setTargetAtTime(1.0, t, 0.03);
+    cf.directR.gain.gain.setTargetAtTime(1.0, t, 0.03);
+
     for (const f of cf.feeds) {
       f.lp.frequency.setTargetAtTime(p.fcut, t, 0.03);
-      f.gain.gain.setTargetAtTime(cross * direct, t, 0.03);
+      f.gain.gain.setTargetAtTime(cross * lowFreqDirect, t, 0.03);
     }
   }
 
@@ -302,42 +324,75 @@ export class HighResAudioEngine {
       this.stereoStage.rToL.gain.setTargetAtTime(0.5, t, ramp);
       this.stereoStage.lToR.gain.setTargetAtTime(0.5, t, ramp);
       this.stereoStage.rToR.gain.setTargetAtTime(0.5, t, ramp);
-    } else if (this.channelSwap) {
-      // Channel Swap: L -> R, R -> L
-      this.stereoStage.lToL.gain.setTargetAtTime(0.0, t, ramp);
-      this.stereoStage.rToL.gain.setTargetAtTime(1.0, t, ramp);
-      this.stereoStage.lToR.gain.setTargetAtTime(1.0, t, ramp);
-      this.stereoStage.rToR.gain.setTargetAtTime(0.0, t, ramp);
     } else {
-      // True Stereo: 100% discrete separation (reference width 1.0)
-      // When in True Stereo mode, direct paths are 1.0 and crosstalk is 0.0.
-      const w = this.stereoMode === 'true-stereo' ? (this.stereoWidth !== undefined ? this.stereoWidth : 1.0) : 1.0;
-      const direct = (1.0 + w) / 2.0;
-      const cross = (1.0 - w) / 2.0;
+      // Determine effective Mid/Side width:
+      // - 'true-stereo': 1.0 (100% discrete 2.0 separation) unless custom width set
+      // - 'wide': 1.45 (145% expanded 3D soundstage) unless custom width > 1.05
+      // - 'crossfeed': 1.0 (binaural crossfeed handled by upstream bs2b stage)
+      let w = 1.0;
+      if (this.stereoMode === 'wide') {
+        w = (this.stereoWidth !== undefined && this.stereoWidth > 1.05) ? this.stereoWidth : 1.45;
+      } else if (this.stereoMode === 'true-stereo') {
+        w = (this.stereoWidth !== undefined) ? this.stereoWidth : 1.0;
+      }
 
-      this.stereoStage.lToL.gain.setTargetAtTime(direct, t, ramp);
-      this.stereoStage.rToR.gain.setTargetAtTime(direct, t, ramp);
-      this.stereoStage.rToL.gain.setTargetAtTime(cross, t, ramp);
-      this.stereoStage.lToR.gain.setTargetAtTime(cross, t, ramp);
+      // Mid/Side matrix with gentle power normalization when widened (>1.0) so center vocal stays anchored
+      const norm = w > 1.0 ? 1 / Math.sqrt((1 + w * w) / 2) : 1.0;
+      const direct = ((1.0 + w) / 2.0) * norm;
+      const cross = ((1.0 - w) / 2.0) * norm;
+
+      if (this.channelSwap) {
+        // Channel Swap: L <-> R while preserving active stereo width
+        this.stereoStage.lToL.gain.setTargetAtTime(cross, t, ramp);
+        this.stereoStage.rToL.gain.setTargetAtTime(direct, t, ramp);
+        this.stereoStage.lToR.gain.setTargetAtTime(direct, t, ramp);
+        this.stereoStage.rToR.gain.setTargetAtTime(cross, t, ramp);
+      } else {
+        this.stereoStage.lToL.gain.setTargetAtTime(direct, t, ramp);
+        this.stereoStage.rToR.gain.setTargetAtTime(direct, t, ramp);
+        this.stereoStage.rToL.gain.setTargetAtTime(cross, t, ramp);
+        this.stereoStage.lToR.gain.setTargetAtTime(cross, t, ramp);
+      }
     }
   }
 
   setStereoMode(mode) {
-    if (['true-stereo', 'crossfeed', 'mono'].includes(mode)) {
+    if (['true-stereo', 'wide', 'crossfeed', 'mono'].includes(mode)) {
       this.stereoMode = mode;
       this.crossfeedEnabled = (mode === 'crossfeed');
+      if (mode === 'true-stereo') {
+        this.stereoWidth = 1.0;
+      } else if (mode === 'wide') {
+        this.stereoWidth = 1.45;
+      } else if (mode === 'mono') {
+        this.stereoWidth = 0.0;
+      } else if (mode === 'crossfeed') {
+        this.stereoWidth = 1.0;
+      }
+      this.updateCrossfeed();
       this.updateStereoStage();
       this.rewire();
     }
   }
 
   setStereoBalance(balance) {
-    this.stereoBalance = Math.max(-1.0, Math.min(1.0, parseFloat(balance) || 0));
+    const val = parseFloat(balance);
+    this.stereoBalance = isNaN(val) ? 0 : Math.max(-1.0, Math.min(1.0, val));
     this.updateStereoStage();
   }
 
   setStereoWidth(width) {
-    this.stereoWidth = Math.max(0.0, Math.min(1.5, parseFloat(width) || 1.0));
+    const val = parseFloat(width);
+    this.stereoWidth = isNaN(val) ? 1.0 : Math.max(0.0, Math.min(1.6, val));
+    if (this.stereoMode !== 'crossfeed') {
+      if (this.stereoWidth <= 0.02) {
+        this.stereoMode = 'mono';
+      } else if (this.stereoWidth > 1.05) {
+        this.stereoMode = 'wide';
+      } else {
+        this.stereoMode = 'true-stereo';
+      }
+    }
     this.updateStereoStage();
   }
 
@@ -612,11 +667,15 @@ export class HighResAudioEngine {
       inputStage = this.dcFilter2;
     }
 
-    // Pure Mode (Bit-Perfect DSP bypass)
+    // Pure Mode (Bit-Perfect DSP bypass of EQ/Preamp; honors explicit Stereo Mode selection)
     if (this.bitPerfect) {
       let pureStage = inputStage;
+      if (this.stereoMode === 'crossfeed' && this.crossfeedEnabled && this.crossfeed) {
+        pureStage.connect(this.crossfeed.input);
+        pureStage = this.crossfeed.output;
+      }
       if (this.stereoStage) {
-        inputStage.connect(this.stereoStage.input);
+        pureStage.connect(this.stereoStage.input);
         pureStage = this.stereoStage.output;
       }
       if (this.noiseGateEnabled && this.gateGainNode) {

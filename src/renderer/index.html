@@ -242,7 +242,8 @@
             <div class="dsp-row">
               <span class="dsp-label">Mode</span>
               <div class="stereo-mode-selector" id="stereo-mode-selector">
-                <button type="button" class="btn-segment active" data-mode="true-stereo" id="btn-mode-true-stereo">True Stereo</button>
+                <button type="button" class="btn-segment active" data-mode="true-stereo" id="btn-mode-true-stereo">Direct 2.0</button>
+                <button type="button" class="btn-segment" data-mode="wide" id="btn-mode-wide">Wide Stage</button>
                 <button type="button" class="btn-segment" data-mode="crossfeed" id="btn-mode-crossfeed">Crossfeed</button>
                 <button type="button" class="btn-segment" data-mode="mono" id="btn-mode-mono">Mono</button>
               </div>
@@ -575,6 +576,9 @@
                   <span>Copy</span>
                 </button>
               </div>
+
+              <div id="connect-adapters-row" style="display: none; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: -6px;"></div>
+              <div id="connect-hostname-hint" style="display: none; font-size: 11.5px; color: var(--text-muted); margin-top: -6px;"></div>
 
               <div class="connect-features-grid">
                 <div class="connect-feat-item">

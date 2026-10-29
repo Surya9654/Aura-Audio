@@ -588,8 +588,10 @@ function updateSignalPath() {
 
   const cfName = CROSSFEED_PROFILES[audioEngine.crossfeedProfile] ? CROSSFEED_PROFILES[audioEngine.crossfeedProfile].name.split(' (')[0] : 'Bauer';
   const stereoLabel = audioEngine.stereoMode === 'true-stereo'
-    ? ' • True Stereo (Discrete 2.0)'
-    : (audioEngine.stereoMode === 'mono' ? ' • Mono Folddown' : ` • Crossfeed (${cfName})`);
+    ? ' • Direct 2.0 (Discrete Reference)'
+    : (audioEngine.stereoMode === 'wide'
+        ? ` • Wide Stage (${Math.round((audioEngine.stereoWidth || 1.45) * 100)}% 3D)`
+        : (audioEngine.stereoMode === 'mono' ? ' • Mono Folddown' : ` • Crossfeed (${cfName})`));
   const swapLabel = audioEngine.channelSwap ? ' • L↔R Swapped' : '';
   const invertLabel = audioEngine.phaseInvertL ? ' • 180° Polarity' : '';
   const dcLabel = audioEngine.subsonicFilterEnabled ? ' • DC/20Hz' : '';
@@ -1689,6 +1691,7 @@ function applyCrossfeed() {
 // 10b. True Stereo Mode & Soundstage Architecture
 const stereoModeChip = document.getElementById('stereo-mode-chip');
 const btnModeTrueStereo = document.getElementById('btn-mode-true-stereo');
+const btnModeWide = document.getElementById('btn-mode-wide');
 const btnModeCrossfeed = document.getElementById('btn-mode-crossfeed');
 const btnModeMono = document.getElementById('btn-mode-mono');
 const stereoWidthInput = document.getElementById('stereo-width');
@@ -1704,7 +1707,7 @@ const stereoStatusDot = document.getElementById('stereo-status-dot');
 function initTrueStereoUI() {
   const saved = JSON.parse(localStorage.getItem('aura.stereoSettings') || '{}');
   const mode = saved.mode || (audioEngine.crossfeedEnabled ? 'crossfeed' : 'true-stereo');
-  const width = saved.width !== undefined ? saved.width : 1.0;
+  const width = saved.width !== undefined ? saved.width : (mode === 'wide' ? 1.45 : (mode === 'mono' ? 0.0 : 1.0));
   const balance = saved.balance !== undefined ? saved.balance : 0.0;
   const swap = !!saved.swap;
   const invert = !!saved.invert;
@@ -1723,7 +1726,7 @@ function initTrueStereoUI() {
   updateStereoUIElements();
 
   // Mode buttons
-  const modeButtons = [btnModeTrueStereo, btnModeCrossfeed, btnModeMono].filter(Boolean);
+  const modeButtons = [btnModeTrueStereo, btnModeWide, btnModeCrossfeed, btnModeMono].filter(Boolean);
   modeButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const targetMode = btn.getAttribute('data-mode');
@@ -1736,8 +1739,10 @@ function initTrueStereoUI() {
     stereoWidthInput.addEventListener('input', (e) => {
       const w = parseInt(e.target.value, 10) / 100;
       audioEngine.setStereoWidth(w);
-      stereoWidthVal.textContent = w === 1.0 ? '100% (Reference)' : (w === 0 ? '0% (Mono)' : `${Math.round(w * 100)}%`);
+      updateStereoUIElements();
       saveStereoSettings();
+      updateSignalPath();
+      if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
     });
   }
 
@@ -1746,14 +1751,10 @@ function initTrueStereoUI() {
     stereoBalanceInput.addEventListener('input', (e) => {
       const b = parseInt(e.target.value, 10) / 100;
       audioEngine.setStereoBalance(b);
-      if (b === 0) {
-        stereoBalanceVal.textContent = 'Center';
-      } else if (b < 0) {
-        stereoBalanceVal.textContent = `L ${Math.abs(Math.round(b * 100))}%`;
-      } else {
-        stereoBalanceVal.textContent = `R ${Math.round(b * 100)}%`;
-      }
+      updateStereoUIElements();
       saveStereoSettings();
+      updateSignalPath();
+      if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
     });
   }
 
@@ -1763,6 +1764,7 @@ function initTrueStereoUI() {
       audioEngine.setChannelSwap(e.target.checked);
       saveStereoSettings();
       updateSignalPath();
+      if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
     });
   }
 
@@ -1772,13 +1774,16 @@ function initTrueStereoUI() {
       audioEngine.setPhaseInvert(e.target.checked);
       saveStereoSettings();
       updateSignalPath();
+      if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
     });
   }
 
-  // Quick True Stereo pill button in master player bar
+  // Quick Stereo pill button in master player bar cycles Direct 2.0 -> Wide Stage -> Crossfeed -> Mono
   if (btnQuickTrueStereo) {
     btnQuickTrueStereo.addEventListener('click', () => {
-      const nextMode = audioEngine.stereoMode === 'true-stereo' ? 'crossfeed' : 'true-stereo';
+      const order = ['true-stereo', 'wide', 'crossfeed', 'mono'];
+      const idx = order.indexOf(audioEngine.stereoMode);
+      const nextMode = order[(idx + 1) % order.length];
       setStereoModeAction(nextMode);
     });
   }
@@ -1789,6 +1794,9 @@ function setStereoModeAction(mode) {
   if (toggleCrossfeed) {
     toggleCrossfeed.checked = (mode === 'crossfeed');
   }
+  if (stereoWidthInput) {
+    stereoWidthInput.value = Math.round((audioEngine.stereoWidth ?? 1.0) * 100);
+  }
   updateStereoUIElements();
   saveStereoSettings();
   updateSignalPath();
@@ -1797,33 +1805,42 @@ function setStereoModeAction(mode) {
 
 function updateStereoUIElements() {
   const mode = audioEngine.stereoMode;
-  [btnModeTrueStereo, btnModeCrossfeed, btnModeMono].forEach(b => {
+  [btnModeTrueStereo, btnModeWide, btnModeCrossfeed, btnModeMono].forEach(b => {
     if (b) b.classList.toggle('active', b.getAttribute('data-mode') === mode);
   });
 
   if (stereoModeChip) {
     if (mode === 'true-stereo') {
-      stereoModeChip.textContent = 'TRUE STEREO 2.0';
+      stereoModeChip.textContent = 'DIRECT 2.0 REFERENCE';
+      stereoModeChip.className = 'spec-chip gold';
+    } else if (mode === 'wide') {
+      stereoModeChip.textContent = 'WIDE 3D SOUNDSTAGE';
       stereoModeChip.className = 'spec-chip gold';
     } else if (mode === 'mono') {
-      stereoModeChip.textContent = 'MONO SUM';
+      stereoModeChip.textContent = 'MONO CENTER SUM';
       stereoModeChip.className = 'spec-chip';
     } else {
-      stereoModeChip.textContent = 'CROSSFEED ACTIVE';
+      stereoModeChip.textContent = 'SPEAKER CROSSFEED';
       stereoModeChip.className = 'spec-chip gold';
     }
   }
 
   if (quickStereoModeName) {
-    quickStereoModeName.textContent = mode === 'true-stereo' ? 'True Stereo' : (mode === 'mono' ? 'Mono' : 'Crossfeed');
+    quickStereoModeName.textContent = mode === 'true-stereo'
+      ? 'Direct 2.0'
+      : (mode === 'wide' ? 'Wide Stage' : (mode === 'mono' ? 'Mono' : 'Crossfeed'));
   }
   if (stereoStatusDot) {
-    stereoStatusDot.style.background = mode === 'true-stereo' ? 'var(--accent-gold)' : (mode === 'mono' ? '#94a3b8' : '#38bdf8');
+    stereoStatusDot.style.background = mode === 'true-stereo'
+      ? 'var(--accent-gold)'
+      : (mode === 'wide' ? '#2ee677' : (mode === 'mono' ? '#94a3b8' : '#38bdf8'));
   }
 
   if (stereoWidthVal && stereoWidthInput) {
     const w = parseFloat(stereoWidthInput.value) / 100;
-    stereoWidthVal.textContent = w === 1.0 ? '100% (Reference)' : (w === 0 ? '0% (Mono)' : `${Math.round(w * 100)}%`);
+    stereoWidthVal.textContent = w === 1.0
+      ? '100% (Reference)'
+      : (w === 0 ? '0% (Mono)' : (w >= 1.4 ? `${Math.round(w * 100)}% (Wide)` : `${Math.round(w * 100)}%`));
   }
   if (stereoBalanceVal && stereoBalanceInput) {
     const b = parseInt(stereoBalanceInput.value, 10);
@@ -2096,7 +2113,13 @@ function broadcastRemoteState(force = false, isTick = false) {
     dynamicRating: metrics.dynamicRating || 'BALANCED',
     crestFactorDb: metrics.crestFactorDb || 10,
     activePreset: state.activePreset ? state.activePreset.name : 'Reference',
+    activePresetId: state.activePreset ? state.activePreset.id : 'flat_reference',
     stereoMode: audioEngine.stereoMode || 'true-stereo',
+    stereoWidth: audioEngine.stereoWidth !== undefined ? audioEngine.stereoWidth : 1.0,
+    stereoBalance: audioEngine.stereoBalance || 0,
+    channelSwap: !!audioEngine.channelSwap,
+    phaseInvert: !!audioEngine.phaseInvertL,
+    crossfeedProfile: audioEngine.crossfeedProfile || 'bauer',
     trackPath: track ? track.path : ''
   };
 
@@ -2279,6 +2302,14 @@ function initConnectUI() {
   const btnOpenBrowser = document.getElementById('btn-open-remote-browser');
   const btnRescan = document.getElementById('btn-rescan-devices');
   const btnQuickConnect = document.getElementById('btn-quick-connect');
+  const adaptersRow = document.getElementById('connect-adapters-row');
+  const hostnameHint = document.getElementById('connect-hostname-hint');
+
+  const refreshRemoteNetworkInfo = () => {
+    if (window.electronAPI && window.electronAPI.getRemoteInfo) {
+      window.electronAPI.getRemoteInfo().then(info => updateRemoteServerInfo(info)).catch(e => console.warn('Remote info error:', e));
+    }
+  };
 
   // Quick connect button in master player bar opens Connect view
   if (btnQuickConnect) {
@@ -2291,20 +2322,59 @@ function initConnectUI() {
         const connectView = document.getElementById('view-connect');
         if (connectView) connectView.classList.add('active');
       }
+      refreshRemoteNetworkInfo();
     });
   }
 
-  // Hook nav-btn-connect to load devices on tab activation
+  // Hook nav-btn-connect to load devices & live network status on tab activation
   const navBtnConnect = document.getElementById('nav-btn-connect');
   if (navBtnConnect) {
     navBtnConnect.addEventListener('click', () => {
+      refreshRemoteNetworkInfo();
       loadConnectDevices();
     });
   }
 
   if (btnRescan) {
     btnRescan.addEventListener('click', () => {
+      refreshRemoteNetworkInfo();
       loadConnectDevices();
+    });
+  }
+
+  // React immediately to OS network online / offline transitions
+  window.addEventListener('online', () => {
+    refreshRemoteNetworkInfo();
+    setTimeout(refreshRemoteNetworkInfo, 1200);
+  });
+  window.addEventListener('offline', () => {
+    refreshRemoteNetworkInfo();
+  });
+
+  // React automatically when Bluetooth / USB DAC / audio endpoints connect or disconnect
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    let deviceChangeTimer = null;
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      if (deviceChangeTimer) clearTimeout(deviceChangeTimer);
+      deviceChangeTimer = setTimeout(async () => {
+        try {
+          const allDevs = await navigator.mediaDevices.enumerateDevices();
+          const outputs = allDevs.filter(d => d.kind === 'audiooutput');
+          if (activeSinkDeviceId && activeSinkDeviceId !== 'default') {
+            const stillPresent = outputs.some(d => d.deviceId === activeSinkDeviceId);
+            if (!stillPresent) {
+              activeSinkDeviceId = 'default';
+              activeSinkDeviceLabel = 'System Default Audio';
+              localStorage.setItem('aura.sinkDeviceId', 'default');
+              localStorage.setItem('aura.sinkDeviceLabel', activeSinkDeviceLabel);
+              await audioEngine.setOutputDevice('default');
+            }
+          }
+        } catch (e) {}
+        loadConnectDevices();
+        scanHardwareDACs();
+        updateSignalPath();
+      }, 450);
     });
   }
 
@@ -2336,22 +2406,77 @@ function initConnectUI() {
     });
   }
 
-  // Retrieve Initial Remote Server Info
+  // Retrieve & Live-Update Remote Server Info
   const updateRemoteServerInfo = (info) => {
     if (!info) return;
-    if (qrImg && info.qr) qrImg.src = info.qr;
+    if (qrImg && info.qr) {
+      qrImg.src = info.qr;
+      qrImg.style.opacity = info.isOffline ? '0.35' : '1';
+    }
     if (urlDisplay && info.url) urlDisplay.textContent = info.url;
-    if (serverStatus && info.ip && info.port) {
-      serverStatus.textContent = `WI-FI SERVER: ${info.ip}:${info.port}`;
+    if (serverStatus) {
+      if (info.isOffline) {
+        serverStatus.textContent = 'WAITING FOR WI-FI / LAN NETWORK...';
+        serverStatus.classList.remove('gold');
+      } else {
+        const netLabel = info.ssid
+          ? `WI-FI (${info.ssid})`
+          : (info.interfaceName ? info.interfaceName.toUpperCase() : 'WI-FI SERVER');
+        serverStatus.textContent = `${netLabel}: ${info.ip}:${info.port}`;
+        serverStatus.classList.add('gold');
+      }
     }
     if (clientsCount && info.connectedClients !== undefined) {
       clientsCount.textContent = `${info.connectedClients} Phone${info.connectedClients === 1 ? '' : 's'} Connected`;
     }
+
+    // Show network-independent mDNS hostname URL hint
+    if (hostnameHint) {
+      if (!info.isOffline && (info.auraLocalUrl || info.hostnameUrl)) {
+        hostnameHint.style.display = 'block';
+        const auraTag = info.auraLocalUrl
+          ? `<code style="color: var(--accent-gold); font-family: 'JetBrains Mono', monospace;">${escapeHtml(info.auraLocalUrl)}</code>`
+          : '';
+        const hostTag = info.hostnameUrl
+          ? `<code style="color: var(--accent-gold); font-family: 'JetBrains Mono', monospace;">${escapeHtml(info.hostnameUrl)}</code>`
+          : '';
+        hostnameHint.innerHTML = `Auto-adapts across any Wi-Fi or Hotspot • Permanent URLs: ${[auraTag, hostTag].filter(Boolean).join(' / ')}`;
+      } else {
+        hostnameHint.style.display = 'none';
+      }
+    }
+
+    // Show adapter selector pills if multiple LAN interfaces are active simultaneously (e.g. Wi-Fi + Dongle / Ethernet)
+    if (adaptersRow) {
+      const adapters = Array.isArray(info.adapters) ? info.adapters : [];
+      if (adapters.length > 1) {
+        adaptersRow.style.display = 'flex';
+        adaptersRow.innerHTML = `<span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Active Adapters:</span>`;
+        adapters.forEach(ad => {
+          const pill = document.createElement('button');
+          const isCurrent = ad.ip === info.ip;
+          pill.type = 'button';
+          pill.className = `spec-chip ${isCurrent ? 'gold' : ''}`;
+          pill.style.cursor = 'pointer';
+          pill.style.fontSize = '10.5px';
+          pill.style.padding = '3px 9px';
+          pill.textContent = `${ad.name}: ${ad.ip}`;
+          pill.addEventListener('click', async () => {
+            if (window.electronAPI && window.electronAPI.selectRemoteAdapter) {
+              const updated = await window.electronAPI.selectRemoteAdapter(ad.ip);
+              updateRemoteServerInfo(updated);
+            }
+          });
+          adaptersRow.appendChild(pill);
+        });
+      } else {
+        adaptersRow.style.display = 'none';
+        adaptersRow.innerHTML = '';
+      }
+    }
   };
 
-  if (window.electronAPI && window.electronAPI.getRemoteInfo) {
-    window.electronAPI.getRemoteInfo().then(info => updateRemoteServerInfo(info)).catch(e => console.warn('Remote info error:', e));
-  }
+  refreshRemoteNetworkInfo();
 
   if (window.electronAPI && window.electronAPI.onRemoteServerReady) {
     window.electronAPI.onRemoteServerReady((info) => {
@@ -2404,9 +2529,43 @@ function initConnectUI() {
           setStereoModeAction(action.mode);
           broadcastRemoteState(true);
         }
+      } else if (cmd === 'set-stereo-width') {
+        if (action.width !== undefined) {
+          const w = Math.max(0, Math.min(1.6, parseFloat(action.width)));
+          audioEngine.setStereoWidth(w);
+          if (stereoWidthInput) stereoWidthInput.value = Math.round(w * 100);
+          updateStereoUIElements();
+          saveStereoSettings();
+          updateSignalPath();
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-stereo-balance') {
+        if (action.balance !== undefined) {
+          const b = Math.max(-1, Math.min(1, parseFloat(action.balance)));
+          audioEngine.setStereoBalance(b);
+          if (stereoBalanceInput) stereoBalanceInput.value = Math.round(b * 100);
+          updateStereoUIElements();
+          saveStereoSettings();
+          updateSignalPath();
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-channel-swap') {
+        if (action.swap !== undefined) {
+          const sw = !!action.swap;
+          audioEngine.setChannelSwap(sw);
+          if (toggleChannelSwap) toggleChannelSwap.checked = sw;
+          saveStereoSettings();
+          updateSignalPath();
+          broadcastRemoteState(true);
+        }
       } else if (cmd === 'set-preset') {
         if (action.preset) {
-          const found = HEADPHONE_PRESETS.find(p => p.name.toLowerCase().includes(action.preset.toLowerCase()));
+          const q = String(action.preset).toLowerCase().replace(/[-_]/g, ' ');
+          const found = HEADPHONE_PRESETS.find(p =>
+            p.id.toLowerCase() === String(action.preset).toLowerCase() ||
+            p.id.toLowerCase().replace(/[-_]/g, ' ').includes(q) ||
+            p.name.toLowerCase().replace(/[-_]/g, ' ').includes(q)
+          );
           if (found && typeof applyPreset === 'function') {
             applyPreset(found);
             broadcastRemoteState(true);

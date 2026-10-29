@@ -501,8 +501,12 @@ ipcMain.on('widget-update-state', (event, state) => {
 });
 
 // Aura 3.0 Mobile Wi-Fi Remote (Connect) IPC
-ipcMain.handle('get-remote-info', () => {
-  return remoteServer.getServerInfo();
+ipcMain.handle('get-remote-info', async () => {
+  return await remoteServer.refreshNetwork(false);
+});
+
+ipcMain.handle('select-remote-adapter', async (event, ip) => {
+  return await remoteServer.selectAdapterIp(ip);
 });
 
 ipcMain.on('remote-update-state', (event, state) => {
