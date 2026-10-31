@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Aura Remote">
-  <title>Aura 3.0 — Wi-Fi Mobile Remote</title>
+  <title>Aura 3.1 — Wi-Fi Mobile Remote</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,10 @@
   <link rel="stylesheet" href="/remote.css">
 </head>
 <body>
-  <!-- Dynamic Ambient Glow Backdrop -->
-  <div class="ambient-glow" id="ambient-glow"></div>
+  <!-- Dynamic Living Mesh Backdrop (Apple Music-Style 4-Color Fluid Shader) -->
+  <div class="ambient-glow" id="ambient-glow">
+    <canvas id="remote-mesh-canvas" class="living-mesh-canvas" aria-hidden="true"></canvas>
+  </div>
   <div class="ambient-scrim"></div>
 
   <!-- Reconnect Banner (shown when connection drops) -->
@@ -58,7 +60,7 @@
       <!-- Album Art Card with Dynamic Lighting -->
       <section class="artwork-section">
         <div class="artwork-card" id="artwork-card">
-          <img id="album-cover" src="/api/artwork" alt="Album Cover">
+          <img id="album-cover" src="/api/artwork" crossorigin="anonymous" alt="Album Cover">
           <div class="artwork-overlay-ring"></div>
         </div>
       </section>
@@ -69,7 +71,7 @@
           <h1 class="track-title" id="track-title">Aura Lossless Studio</h1>
         </div>
         <p class="track-artist" id="track-artist">Ready for Playback</p>
-        <p class="track-album" id="track-album">Aura 3.0 Audiophile Master</p>
+        <p class="track-album" id="track-album">Aura 3.1 Audiophile Master</p>
       </section>
 
       <!-- Scrubber Progress Bar -->

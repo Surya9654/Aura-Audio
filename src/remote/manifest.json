@@ -1,7 +1,7 @@
 {
-  "name": "Aura 3.0 Remote",
+  "name": "Aura 3.1 Remote",
   "short_name": "Aura Remote",
-  "description": "Aura 3.0 Lossless Workstation Wi-Fi Remote Controller",
+  "description": "Aura 3.1 Lossless Workstation Wi-Fi Remote Controller",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#07090e",

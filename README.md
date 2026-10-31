@@ -1,6 +1,6 @@
-# Aura 2.0 — Ultra-Premium Audiophile Lossless Workstation
+# Aura 3.1 — Ultra-Premium Audiophile Lossless Workstation
 
-**Aura 2.0** is an Apple-inspired desktop lossless audio workstation built specifically for FLAC, high-resolution WAV/AIFF, and bit-perfect DAC playback.
+**Aura 3.1** is an Apple-inspired desktop lossless audio workstation built specifically for FLAC, high-resolution WAV/AIFF, adaptive Wi-Fi remote control, and bit-perfect DAC playback.
 
 ---
 
@@ -77,6 +77,16 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 ---
 
 ## 📝 Changelog & Evolution
+
+### Version 3.1.0 (Aura 3.1 — Living Mesh UI, Master Edition Alignment & Advanced Adaptive Connectivity)
+- **Apple Music-Style "Living Mesh" Backdrop & Master Edition Alignment**:
+  - 4-color perceptual dominant palette extractor (`48×48` offscreen quantization) animating 5 multi-layered fluid color blobs across Fullscreen (`#fs-backdrop`), Studio (`#ambient-glow`), Lockscreen Widgets, and the Mobile Wi-Fi Remote.
+  - Real-time `32–120 Hz` sub-bass FFT modulation (`fftSize = 4096` leaf tap) driving fluid drift velocity, blob expansion, and artwork halo glow.
+  - Full alignment with **Master Edition Personalisation** (`Master Gold`, `Blood Red`, `Spotify Green`, `Liquid Platinum`) across Desktop & Mobile Remote, with selectable `Harmonized`, `Theme Lock`, and `Cover Pure` backdrop modes.
+- **Advanced Adaptive Wi-Fi & Audio Connectivity**:
+  - Live OS routing-table and physical Wi-Fi/LAN adapter auto-detection (`probeOutboundIp` + `scanNetworkInterfaces`) with 3s hot-swap watcher, live QR regeneration, and multi-adapter selector pills.
+  - Zero-dependency multicast mDNS responder (`aura.local` & `<hostname>.local`) + App-Shell Service Worker (`sw.js`) and `/24` parallel subnet auto-discovery so mobile remotes reconnect automatically across Wi-Fi switches, USB dongles, and hotspots without dead IPs.
+  - Redesigned True Stereo & Soundstage controls (`Direct 2.0`, `Wide 3D`, compensated `Speaker` bs2b crossfeed, `Mono`, `Stage Width`, `L/R Balance`, `Swap L↔R`) and automatic Bluetooth/USB audio endpoint hot-plug handling.
 
 ### Version 2.0.0 (Aura 2.0 — Dynamics Heatmap & Audiophile Search)
 - **Dynamic Dynamic Range (DR) & Crest Factor Heatmap Timeline**:

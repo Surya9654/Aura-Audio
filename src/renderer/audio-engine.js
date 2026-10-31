@@ -17,6 +17,10 @@ export class HighResAudioEngine {
     this.preampNode = null;
     this.eqNodes = [];
     this.analyserNode = null;
+    this.subBassAnalyser = null;
+    this.subBassBins = null;
+    this.subBassSmooth = 0;
+    this.lastSubBassTime = 0;
     this.crossfeedNode = null;
     this.crossfeed = null;
     this.crossfeedEnabled = false;
@@ -128,6 +132,12 @@ export class HighResAudioEngine {
     this.analyserNode.fftSize = 512;
     this.analyserNode.smoothingTimeConstant = 0.85;
 
+    // Dedicated high-resolution Sub-Bass FFT tap (32–120 Hz) for Living Mesh visuals
+    // Leaf node tap: adds zero latency or coloration to the master signal path
+    this.subBassAnalyser = this.audioContext.createAnalyser();
+    this.subBassAnalyser.fftSize = 4096;
+    this.subBassAnalyser.smoothingTimeConstant = 0.64;
+
     // Master Output Gain
     this.gainNode = this.audioContext.createGain();
     this.gainNode.gain.value = 1.0;
@@ -137,6 +147,7 @@ export class HighResAudioEngine {
     this.buildCrossfeed();
     this.buildStereoStage();
 
+    this.analyserNode.connect(this.subBassAnalyser);
     this.analyserNode.connect(this.gainNode);
     this.gainNode.connect(this.audioContext.destination);
 
@@ -743,6 +754,62 @@ export class HighResAudioEngine {
     if (this.analyserNode) {
       this.analyserNode.getByteTimeDomainData(array);
     }
+  }
+
+  /**
+   * Real-time Sub-Bass Energy (32–120 Hz) normalized 0..1 with asymmetric
+   * musical attack/release smoothing for Living Mesh backdrop modulation.
+   */
+  getSubBassEnergy() {
+    const now = performance.now();
+    const dt = this.lastSubBassTime > 0
+      ? Math.min(0.1, Math.max(0.004, (now - this.lastSubBassTime) / 1000))
+      : 0.016;
+    this.lastSubBassTime = now;
+
+    if (!this.subBassAnalyser || !this.audioContext || !this.isPlaying) {
+      this.subBassSmooth *= Math.exp(-dt * 5.5);
+      if (this.subBassSmooth < 0.002) this.subBassSmooth = 0;
+      return this.subBassSmooth;
+    }
+
+    const binHz = this.audioContext.sampleRate / this.subBassAnalyser.fftSize;
+    const minBin = Math.max(1, Math.floor(32 / binHz));
+    const maxBin = Math.min(this.subBassAnalyser.frequencyBinCount - 1, Math.ceil(120 / binHz));
+
+    const needed = maxBin + 2;
+    if (!this.subBassBins || this.subBassBins.length < needed) {
+      this.subBassBins = new Uint8Array(Math.max(48, needed));
+    }
+
+    this.subBassAnalyser.getByteFrequencyData(this.subBassBins);
+
+    let weightedSum = 0;
+    let weightTotal = 0;
+    let peakVal = 0;
+
+    for (let b = minBin; b <= maxBin; b++) {
+      const freq = b * binHz;
+      const val = this.subBassBins[b];
+      if (val > peakVal) peakVal = val;
+      // Emphasize deep chest-punch & sub-bass fundamentals (40–95 Hz)
+      const weight = (freq >= 40 && freq <= 95) ? 1.35 : 1.0;
+      weightedSum += val * weight;
+      weightTotal += weight;
+    }
+
+    const avgVal = weightTotal > 0 ? (weightedSum / weightTotal) : 0;
+    const combined = (avgVal * 0.62 + peakVal * 0.38) / 255;
+
+    // Noise-floor gate + nonlinear dynamic curve so kicks bloom cleanly without constant wash
+    const gated = Math.max(0, Math.min(1, (combined - 0.16) / 0.68));
+    const target = Math.pow(gated, 1.28);
+
+    // Fast transient attack (~45ms), silky liquid release (~230ms)
+    const rate = target > this.subBassSmooth ? 22.0 : 4.4;
+    this.subBassSmooth += (target - this.subBassSmooth) * (1 - Math.exp(-dt * rate));
+
+    return Math.max(0, Math.min(1, this.subBassSmooth));
   }
 
   /**

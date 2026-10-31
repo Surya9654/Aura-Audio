@@ -1,7 +1,7 @@
 {
   "name": "aura-audio",
-  "version": "2.0.0",
-  "description": "Aura 2.0 — Ultra-Premium Lossless Audiophile Player",
+  "version": "3.1.0",
+  "description": "Aura 3.1 — Ultra-Premium Lossless Audiophile Player",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
@@ -30,8 +30,8 @@
     "electron-builder": "^26.18.0"
   },
   "build": {
-    "appId": "com.aura.audio2",
-    "productName": "Aura 2.0",
+    "appId": "com.aura.audio3",
+    "productName": "Aura 3.1",
     "copyright": "Copyright © 2026 Aura Studio",
     "directories": {
       "output": "dist"
@@ -54,7 +54,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Aura 2.0"
+      "shortcutName": "Aura 3.1"
     }
   }
 }

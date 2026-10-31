@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aura 2.0 — Audiophile Lossless Studio</title>
+  <title>Aura 3.1 — Audiophile Lossless Studio</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="polish.css">
   <link rel="stylesheet" href="fullscreen.css">
@@ -17,7 +17,7 @@
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
       </svg>
       <span>AURA AUDIO</span>
-      <span class="titlebar-badge">Aura 3.0</span>
+      <span class="titlebar-badge">Aura 3.1</span>
     </div>
 
     <div style="display: flex; align-items: center; gap: 10px;">
@@ -35,8 +35,10 @@
     </div>
   </header>
 
-  <!-- Ambient Dynamic Studio Lighting Background -->
-  <div class="ambient-glow" id="ambient-glow"></div>
+  <!-- Ambient Dynamic Studio Lighting Background (Apple Music-Style Living Mesh) -->
+  <div class="ambient-glow" id="ambient-glow">
+    <canvas id="ambient-mesh-canvas" class="living-mesh-canvas" aria-hidden="true"></canvas>
+  </div>
 
   <!-- Main View Container -->
   <div class="app-container">
@@ -345,15 +347,22 @@
             <div class="signal-note" id="sp-note">Play a track to see exactly how it reaches your ears.</div>
           </div>
 
-          <!-- Theme Personalisation: Master Edition Accent -->
-          <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 14px; padding: 18px 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <!-- Theme Personalisation: Master Edition Accent & Living Mesh Alignment -->
+          <div class="setting-row" style="flex-direction: column; align-items: stretch; gap: 14px; padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px;">
               <div>
                 <div class="setting-title" style="display: flex; align-items: center; gap: 10px;">
                   <span>Master Edition Personalisation</span>
                   <span class="spec-chip gold" id="theme-active-badge">Master Gold</span>
                 </div>
-                <div class="setting-desc">Personalise your Master Edition accent hue while preserving the pure bit-perfect acoustic engine.</div>
+                <div class="setting-desc">Aligns your Master Edition accent hue, smoked-glass surfaces, and Living Mesh backdrop across Desktop &amp; Mobile Remote.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Backdrop</span>
+                <div class="stereo-mode-selector" id="backdrop-mode-selector" title="Master Theme keeps the Living Mesh strictly in your selected Master Edition hue; Cover Art uses dark-calibrated album colors in Fullscreen &amp; Remote">
+                  <button type="button" class="btn-segment active" data-backdrop-mode="harmonized">Master Theme</button>
+                  <button type="button" class="btn-segment" data-backdrop-mode="artwork">Cover Art</button>
+                </div>
               </div>
             </div>
             <div class="theme-swatch-grid" id="theme-swatch-grid">
@@ -470,7 +479,9 @@
 
             <div class="lockscreen-widget-wrapper">
               <div class="lockscreen-widget" id="lockscreen-widget">
-                <div class="ls-backdrop" id="ls-backdrop"></div>
+                <div class="ls-backdrop" id="ls-backdrop">
+                  <canvas id="ls-mesh-canvas" class="living-mesh-canvas" aria-hidden="true"></canvas>
+                </div>
                 <div class="ls-scrim"></div>
                 <div class="ls-content">
                   <div class="ls-top-row">
@@ -563,7 +574,7 @@
                 <span class="spec-chip gold" id="connect-server-status">WI-FI SERVER: 0.0.0.0:4040</span>
                 <span class="spec-chip" id="connect-clients-count">0 Phones Connected</span>
               </div>
-              <h2 class="connect-title">Aura 3.0 Mobile Remote Controller</h2>
+              <h2 class="connect-title">Aura 3.1 Mobile Remote Controller</h2>
               <p class="connect-desc">
                 Control bit-perfect lossless playback, seek tracks with 60 FPS Dynamic Range waveforms, adjust volume, and switch True Stereo / Acoustic targets directly from your phone on the local Wi-Fi network. Zero installation required.
               </p>
@@ -677,7 +688,7 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect><rect x="6" y="6" width="6" height="6" rx="1" ry="1"></rect></svg>
       </button>
 
-      <button class="btn-ctrl" id="btn-quick-true-stereo" title="Active Stereo Architecture (Click to toggle True Stereo / Crossfeed)" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(229, 185, 95, 0.28); background: rgba(229, 185, 95, 0.08);">
+      <button class="btn-ctrl" id="btn-quick-true-stereo" title="Active Stereo Architecture (Click to toggle True Stereo / Crossfeed)" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent-alpha35); background: var(--accent-alpha07);">
         <span class="stereo-status-dot" id="stereo-status-dot" style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent-gold); display: inline-block;"></span>
         <span id="quick-stereo-mode-name">True Stereo</span>
       </button>
@@ -687,7 +698,7 @@
         <span id="quick-preset-name">Reference</span>
       </button>
 
-      <button class="btn-ctrl" id="btn-quick-connect" title="Aura Connect: Wi-Fi Remote & Devices" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(229, 185, 95, 0.28); background: rgba(229, 185, 95, 0.08);">
+      <button class="btn-ctrl" id="btn-quick-connect" title="Aura Connect: Wi-Fi Remote & Devices" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent-alpha35); background: var(--accent-alpha07);">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
         <span id="quick-connect-label">Connect</span>
       </button>
@@ -703,7 +714,9 @@
 
   <!-- Fullscreen Now Playing -->
   <section class="fs-player" id="fs-player" aria-hidden="true">
-    <div class="fs-backdrop" id="fs-backdrop"></div>
+    <div class="fs-backdrop" id="fs-backdrop">
+      <canvas id="fs-mesh-canvas" class="living-mesh-canvas" aria-hidden="true"></canvas>
+    </div>
     <div class="fs-scrim"></div>
 
     <button class="glass-btn glass-btn-sm fs-close" id="fs-close" title="Back to library" aria-label="Back to library">
@@ -770,7 +783,9 @@
       </button>
     </div>
     <div class="lockscreen-widget" id="floating-lockscreen-widget">
-      <div class="ls-backdrop" id="fls-backdrop"></div>
+      <div class="ls-backdrop" id="fls-backdrop">
+        <canvas id="fls-mesh-canvas" class="living-mesh-canvas" aria-hidden="true"></canvas>
+      </div>
       <div class="ls-scrim"></div>
       <div class="ls-content">
         <div class="ls-top-row">

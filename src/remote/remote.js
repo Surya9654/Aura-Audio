@@ -55,6 +55,8 @@
   const badgeFormat = document.getElementById('badge-format');
   const badgeDr = document.getElementById('badge-dr');
   const albumCover = document.getElementById('album-cover');
+  const artworkCard = document.getElementById('artwork-card');
+  const remoteMeshCanvas = document.getElementById('remote-mesh-canvas');
   const trackTitle = document.getElementById('track-title');
   const trackArtist = document.getElementById('track-artist');
   const trackAlbum = document.getElementById('track-album');
@@ -725,6 +727,17 @@
       volumeSlider.value = v;
       volumeVal.textContent = `${v}%`;
     }
+    if (data.activeThemeId) {
+      state.activeThemeId = data.activeThemeId;
+      document.documentElement.setAttribute('data-theme', data.activeThemeId);
+    }
+    if (data.subBass !== undefined) {
+      meshTargetSubBass = state.isPlaying ? Math.max(0, Math.min(1, data.subBass)) : 0;
+    }
+    if (Array.isArray(data.meshPalette) && data.meshPalette.length === 4) {
+      hasServerMeshPalette = true;
+      setRemoteMeshPalette(data.meshPalette);
+    }
     updateProgressUI();
   }
 
@@ -746,7 +759,19 @@
       trackAlbum.textContent = state.album || '';
     }
 
-    // Album Artwork
+    // Album Artwork, Master Edition Theme & Living Mesh Palette Sync
+    if (state.activeThemeId) {
+      document.documentElement.setAttribute('data-theme', state.activeThemeId);
+    }
+    if (Array.isArray(newState.meshPalette) && newState.meshPalette.length === 4) {
+      hasServerMeshPalette = true;
+      setRemoteMeshPalette(newState.meshPalette);
+    }
+    if (newState.subBass !== undefined) {
+      meshTargetSubBass = state.isPlaying ? Math.max(0, Math.min(1, newState.subBass)) : 0;
+    } else if (!state.isPlaying) {
+      meshTargetSubBass = 0;
+    }
     if (state.coverUrl) {
       try {
         const resolved = resolveApiUrl(state.coverUrl);
@@ -832,9 +857,243 @@
     remainingTimeEl.textContent = `-${formatDuration(rem >= 0 ? rem : 0)}`;
   }
 
-  // 60 FPS Scrubber timer loop
-  function startProgressLoop() {
+  // Apple Music-Style Living Mesh Backdrop (4-Color Offscreen Palette + Sub-Bass Fluid Blobs)
+  const REMOTE_DEFAULT_PALETTE = [
+    [36, 28, 18],
+    [214, 164, 72],
+    [124, 78, 38],
+    [46, 74, 118]
+  ];
+  let meshCurrentColors = REMOTE_DEFAULT_PALETTE.map(c => [...c]);
+  let meshTargetColors = REMOTE_DEFAULT_PALETTE.map(c => [...c]);
+  let meshTargetSubBass = 0;
+  let meshSmoothSubBass = 0;
+  let meshPhase = Math.random() * 100;
+  let meshLastFrameTime = performance.now();
+  let meshCtx = null;
+  let hasServerMeshPalette = false;
+  let lastExtractedCoverSrc = '';
+  const meshSamplerCanvas = document.createElement('canvas');
+  meshSamplerCanvas.width = 48;
+  meshSamplerCanvas.height = 48;
+
+  if (remoteMeshCanvas) {
+    remoteMeshCanvas.width = 144;
+    remoteMeshCanvas.height = 144;
+    meshCtx = remoteMeshCanvas.getContext('2d', { alpha: false });
+  }
+
+  function rgbToHslRemote(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+    return [h, s, l];
+  }
+
+  function hslToRgbRemote(h, s, l) {
+    h = ((h % 1) + 1) % 1;
+    s = Math.max(0, Math.min(1, s));
+    l = Math.max(0, Math.min(1, l));
+    if (s === 0) {
+      const v = Math.round(l * 255);
+      return [v, v, v];
+    }
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    return [
+      Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+      Math.round(hue2rgb(p, q, h) * 255),
+      Math.round(hue2rgb(p, q, h - 1 / 3) * 255)
+    ];
+  }
+
+  function setRemoteMeshPalette(palette) {
+    if (!Array.isArray(palette) || palette.length < 4) return;
+    meshTargetColors = palette.slice(0, 4).map(c => [
+      Number(c[0]) || 0,
+      Number(c[1]) || 0,
+      Number(c[2]) || 0
+    ]);
+  }
+
+  function extractCoverPaletteRemote(img) {
+    if (!img || !img.naturalWidth || img.naturalWidth <= 2) return;
+    try {
+      const sCtx = meshSamplerCanvas.getContext('2d', { willReadFrequently: true });
+      sCtx.clearRect(0, 0, 48, 48);
+      sCtx.drawImage(img, 0, 0, 48, 48);
+      const data = sCtx.getImageData(0, 0, 48, 48).data;
+      const buckets = new Map();
+      let maxSat = 0;
+
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 140) continue;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+        let bk = buckets.get(key);
+        if (!bk) {
+          bk = { count: 0, rSum: 0, gSum: 0, bSum: 0 };
+          buckets.set(key, bk);
+        }
+        bk.count++;
+        bk.rSum += r; bk.gSum += g; bk.bSum += b;
+      }
+      if (buckets.size === 0) return;
+
+      const cands = [];
+      for (const bk of buckets.values()) {
+        const r = bk.rSum / bk.count, g = bk.gSum / bk.count, b = bk.bSum / bk.count;
+        const [h, s, l] = rgbToHslRemote(r, g, b);
+        if (s > maxSat) maxSat = s;
+        const lumPen = (l < 0.07 || l > 0.94) ? 0.12 : (1 - Math.abs(l - 0.48) * 0.55);
+        const score = Math.pow(bk.count, 0.72) * (0.32 + s * 2.1) * Math.max(0.1, lumPen);
+        cands.push({ rgb: [r, g, b], hsl: [h, s, l], score });
+      }
+      cands.sort((a, b) => b.score - a.score);
+
+      const isMono = maxSat < 0.13;
+      const chosen = [];
+      for (let slot = 0; slot < 4; slot++) {
+        let best = null, bestScore = -1;
+        for (let i = 0; i < Math.min(cands.length, 80); i++) {
+          const cand = cands[i];
+          if (chosen.includes(cand)) continue;
+          let div = 1.0;
+          for (const p of chosen) {
+            const dr = cand.rgb[0] - p.rgb[0], dg = cand.rgb[1] - p.rgb[1], db = cand.rgb[2] - p.rgb[2];
+            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+            const hDiff = Math.min(Math.abs(cand.hsl[0] - p.hsl[0]), 1 - Math.abs(cand.hsl[0] - p.hsl[0]));
+            if (dist < 42) div *= 0.08;
+            else if (dist < 85) div *= 0.45;
+            if (!isMono && hDiff < 0.07) div *= 0.45;
+          }
+          if (cand.score * div > bestScore) {
+            bestScore = cand.score * div;
+            best = cand;
+          }
+        }
+        if (best) chosen.push(best);
+      }
+
+      while (chosen.length < 4) {
+        const ref = chosen[chosen.length - 1] || { hsl: [0.11, 0.55, 0.42] };
+        const nh = (ref.hsl[0] + 0.15 * chosen.length) % 1;
+        const nl = Math.max(0.2, Math.min(0.55, ref.hsl[2] + 0.1));
+        chosen.push({ hsl: [nh, ref.hsl[1], nl] });
+      }
+
+      const calibrated = chosen.map((item, idx) => {
+        let [h, s, l] = item.hsl;
+        if (isMono) {
+          const tl = [0.16, 0.38, 0.27, 0.22];
+          return hslToRgbRemote(h, Math.min(0.12, s), l * 0.45 + tl[idx] * 0.55);
+        }
+        if (idx === 0) return hslToRgbRemote(h, Math.min(0.86, s * 1.15 + 0.08), Math.max(0.16, Math.min(0.36, l * 0.78)));
+        if (idx === 1) return hslToRgbRemote(h, Math.min(0.95, s * 1.28 + 0.12), Math.max(0.34, Math.min(0.58, l * 1.05 + 0.04)));
+        if (idx === 2) return hslToRgbRemote(h, Math.min(0.92, s * 1.22 + 0.08), Math.max(0.28, Math.min(0.54, l)));
+        return hslToRgbRemote(h, Math.min(0.88, s * 1.18 + 0.06), Math.max(0.24, Math.min(0.50, l)));
+      });
+      setRemoteMeshPalette(calibrated);
+    } catch (e) {}
+  }
+
+  if (albumCover) {
+    albumCover.addEventListener('load', () => {
+      // Only run local cover extraction as fallback if Desktop hasn't sent its Master-Edition-aligned meshPalette
+      if (!hasServerMeshPalette && albumCover.src && albumCover.src !== lastExtractedCoverSrc) {
+        lastExtractedCoverSrc = albumCover.src;
+        extractCoverPaletteRemote(albumCover);
+      }
+    });
+  }
+
+  function stepLivingMesh(now) {
+    if (!meshCtx || document.hidden) {
+      meshLastFrameTime = now;
+      return;
+    }
+    const dt = Math.min(0.08, Math.max(0.004, (now - meshLastFrameTime) / 1000));
+    meshLastFrameTime = now;
+
+    const effectiveTarget = state.isPlaying ? meshTargetSubBass : 0;
+    const bassRate = effectiveTarget > meshSmoothSubBass ? 18.0 : 4.2;
+    meshSmoothSubBass += (effectiveTarget - meshSmoothSubBass) * (1 - Math.exp(-dt * bassRate));
+    const energy = Math.max(0, Math.min(1, meshSmoothSubBass));
+
+    meshPhase += dt * (0.42 + energy * 1.55);
+
+    const lerp = 1 - Math.exp(-dt * 2.5);
+    for (let i = 0; i < 4; i++) {
+      meshCurrentColors[i][0] += (meshTargetColors[i][0] - meshCurrentColors[i][0]) * lerp;
+      meshCurrentColors[i][1] += (meshTargetColors[i][1] - meshCurrentColors[i][1]) * lerp;
+      meshCurrentColors[i][2] += (meshTargetColors[i][2] - meshCurrentColors[i][2]) * lerp;
+    }
+
+    const w = remoteMeshCanvas.width;
+    const h = remoteMeshCanvas.height;
+    const c0 = meshCurrentColors[0];
+    const c1 = meshCurrentColors[1];
+    const c2 = meshCurrentColors[2];
+    const c3 = meshCurrentColors[3];
+    const t = meshPhase;
+
+    meshCtx.globalCompositeOperation = 'source-over';
+    meshCtx.fillStyle = `rgb(${Math.round(6 + c0[0] * 0.30)}, ${Math.round(8 + c0[1] * 0.30)}, ${Math.round(13 + c0[2] * 0.34)})`;
+    meshCtx.fillRect(0, 0, w, h);
+
+    const blobs = [
+      { c: c1, x: 0.50 + Math.sin(t * 0.37) * 0.28, y: 0.30 + Math.cos(t * 0.29) * 0.22, r: (0.64 + energy * 0.22) * w, a: 0.70 + energy * 0.20 },
+      { c: c2, x: 0.22 + Math.cos(t * 0.31 + 1.4) * 0.25, y: 0.65 + Math.sin(t * 0.23 + 0.8) * 0.24, r: (0.60 + energy * 0.18) * w, a: 0.60 + energy * 0.16 },
+      { c: c3, x: 0.78 + Math.sin(t * 0.27 + 2.6) * 0.24, y: 0.60 + Math.cos(t * 0.33 + 1.9) * 0.25, r: (0.56 + energy * 0.19) * w, a: 0.56 + energy * 0.16 },
+      { c: c0, x: 0.24 + Math.sin(t * 0.21 + 4.1) * 0.22, y: 0.22 + Math.cos(t * 0.25 + 3.2) * 0.20, r: (0.68 + energy * 0.14) * w, a: 0.64 + energy * 0.12 },
+      { c: c1, x: 0.50 + Math.cos(t * 0.43) * 0.10, y: 0.36 + Math.sin(t * 0.39) * 0.10, r: (0.36 + energy * 0.30) * w, a: 0.18 + energy * 0.38 }
+    ];
+
+    meshCtx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      const cx = b.x * w, cy = b.y * h;
+      const r = Math.round(b.c[0]), g = Math.round(b.c[1]), bl = Math.round(b.c[2]);
+      const grad = meshCtx.createRadialGradient(cx, cy, 0, cx, cy, b.r);
+      grad.addColorStop(0, `rgba(${r}, ${g}, ${bl}, ${Math.min(0.95, b.a).toFixed(3)})`);
+      grad.addColorStop(0.48, `rgba(${r}, ${g}, ${bl}, ${(b.a * 0.45).toFixed(3)})`);
+      grad.addColorStop(1, `rgba(${r}, ${g}, ${bl}, 0)`);
+      meshCtx.fillStyle = grad;
+      meshCtx.fillRect(0, 0, w, h);
+    }
+    meshCtx.globalCompositeOperation = 'source-over';
+
+    if (artworkCard && currentActiveTab === 'player') {
+      const spread = Math.round(38 + energy * 30);
+      const glowA = (0.24 + energy * 0.34).toFixed(3);
+      artworkCard.style.boxShadow =
+        `0 16px 40px rgba(0, 0, 0, 0.65), 0 0 ${spread}px rgba(${Math.round(c1[0])}, ${Math.round(c1[1])}, ${Math.round(c1[2])}, ${glowA})`;
+    }
+  }
+
+  // 60 FPS Scrubber & Living Mesh animation loop
+  function startProgressLoop(now) {
     updateProgressUI();
+    stepLivingMesh(now || performance.now());
     requestAnimationFrame(startProgressLoop);
   }
 

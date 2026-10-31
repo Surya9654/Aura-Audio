@@ -2,6 +2,7 @@ import { HighResAudioEngine, CROSSFEED_PROFILES } from './audio-engine.js';
 import { HEADPHONE_PRESETS, EQ_FREQUENCIES } from './presets.js';
 import { searchTracks, highlightMatches } from './search.js';
 import { DynamicsHeatmapManager } from './dynamics-heatmap.js';
+import { LivingMeshController } from './living-mesh.js';
 
 // Default Application Master Cover
 export const DEFAULT_APP_COVER = '../../DefaultCover/Gemini_Generated_Image_3vnl5n3vnl5n3vnl.png';
@@ -67,6 +68,14 @@ const state = {
 };
 
 const audioEngine = new HighResAudioEngine();
+const livingMesh = new LivingMeshController({
+  getSubBassEnergy: () => audioEngine.getSubBassEnergy(),
+  onPaletteChange: () => {
+    if (typeof broadcastRemoteState === 'function') {
+      broadcastRemoteState(true);
+    }
+  }
+});
 
 // DOM Elements
 const views = document.querySelectorAll('.view-panel');
@@ -653,13 +662,11 @@ async function playTrackIndex(index) {
 
   const ambientGlow = document.getElementById('ambient-glow');
   const coverUrl = getTrackCover(track);
+  const hasRealCover = Boolean(track && track.hasCover && track.coverData);
   playerArtBox.innerHTML = `<img src="${coverUrl}" alt="" style="width:100%;height:100%;border-radius:10px;object-fit:cover;" onerror="this.src='${DEFAULT_APP_COVER}'" />`;
+  livingMesh.setArtwork(coverUrl, hasRealCover);
   if (ambientGlow) {
-    ambientGlow.style.backgroundImage = `linear-gradient(rgba(7, 9, 14, 0.55), rgba(7, 9, 14, 0.55)), url('${coverUrl}')`;
-    ambientGlow.style.backgroundSize = 'cover';
-    ambientGlow.style.backgroundPosition = 'center';
-    ambientGlow.style.opacity = '0.30';
-    ambientGlow.style.filter = 'blur(90px) saturate(0.8)';
+    ambientGlow.style.opacity = '0.34';
   }
 
   // Update the highlighted row in place (no full re-render, no flicker)
@@ -1128,6 +1135,7 @@ function escapeHtml(str) {
 
 // Application Boot
 async function initApp() {
+  livingMesh.mount();
   initEQSliders();
   initPresetsUI();
   startVisualizer();
@@ -1401,14 +1409,12 @@ function updateLockscreenWidgets(track) {
     lsTag.classList.toggle('flac-neon', isFlac);
   }
   if (lsArtImg) lsArtImg.src = coverUrl;
-  if (lsBackdrop) lsBackdrop.style.backgroundImage = `url('${coverUrl}')`;
 
   // Floating Overlay Widget
   const flsTitle = document.getElementById('fls-title');
   const flsArtist = document.getElementById('fls-artist');
   const flsTag = document.getElementById('fls-tag');
   const flsArtImg = document.getElementById('fls-art-img');
-  const flsBackdrop = document.getElementById('fls-backdrop');
 
   if (flsTitle) flsTitle.textContent = title;
   if (flsArtist) flsArtist.textContent = artist;
@@ -1417,7 +1423,6 @@ function updateLockscreenWidgets(track) {
     flsTag.classList.toggle('flac-neon', isFlac);
   }
   if (flsArtImg) flsArtImg.src = coverUrl;
-  if (flsBackdrop) flsBackdrop.style.backgroundImage = `url('${coverUrl}')`;
 }
 
 function syncLockscreenScrubber(currentTime, duration) {
@@ -1557,8 +1562,9 @@ function refreshFullscreen(animateGrid = false) {
   }
 
   const coverUrl = getTrackCover(track);
+  const hasRealCover = Boolean(track && track.hasCover && track.coverData);
   art.innerHTML = `<img src="${coverUrl}" alt="" onerror="this.src='${DEFAULT_APP_COVER}'" />`;
-  backdrop.style.backgroundImage = `url('${coverUrl}')`;
+  livingMesh.setArtwork(coverUrl, hasRealCover);
   if (fsDetails.classList.contains('open')) renderSongDetails();
 }
 
@@ -1978,6 +1984,12 @@ function applyTheme(themeId, save = true) {
   document.querySelectorAll('.theme-swatch-card').forEach(card => {
     card.classList.toggle('active', card.dataset.themeId === theme.id);
   });
+
+  // Immediately align Living Mesh Backdrop & Mobile Remote with active Master Edition theme
+  livingMesh.setTheme(theme.id);
+  if (typeof broadcastRemoteState === 'function') {
+    broadcastRemoteState(true);
+  }
 }
 
 function initThemePersonalisation() {
@@ -1998,6 +2010,27 @@ function initThemePersonalisation() {
       `;
       card.addEventListener('click', () => applyTheme(theme.id));
       container.appendChild(card);
+    });
+  }
+
+  // Backdrop Alignment Mode Selector (Harmonized | Theme Lock | Cover Pure)
+  const backdropSelector = document.getElementById('backdrop-mode-selector');
+  if (backdropSelector) {
+    const syncBackdropButtons = (mode) => {
+      backdropSelector.querySelectorAll('[data-backdrop-mode]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.backdropMode === mode);
+      });
+    };
+    syncBackdropButtons(livingMesh.getBackdropMode());
+    backdropSelector.querySelectorAll('[data-backdrop-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.backdropMode;
+        livingMesh.setBackdropMode(mode);
+        syncBackdropButtons(mode);
+        if (typeof broadcastRemoteState === 'function') {
+          broadcastRemoteState(true);
+        }
+      });
     });
   }
 
@@ -2120,6 +2153,10 @@ function broadcastRemoteState(force = false, isTick = false) {
     channelSwap: !!audioEngine.channelSwap,
     phaseInvert: !!audioEngine.phaseInvertL,
     crossfeedProfile: audioEngine.crossfeedProfile || 'bauer',
+    activeThemeId: state.activeThemeId || 'gold',
+    backdropMode: livingMesh.getBackdropMode(),
+    subBass: Math.round((audioEngine.getSubBassEnergy ? audioEngine.getSubBassEnergy() : 0) * 1000) / 1000,
+    meshPalette: livingMesh.getPalette(),
     trackPath: track ? track.path : ''
   };
 

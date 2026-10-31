@@ -2,7 +2,7 @@
 // Ensures the Remote UI loads immediately even when opened from a previous Wi-Fi IP
 // (e.g. saved Home Screen PWA or bookmark), allowing remote.js to auto-discover the new IP.
 
-const CACHE_NAME = 'aura-remote-shell-v2';
+const CACHE_NAME = 'aura-remote-shell-v3.1';
 const SHELL_ASSETS = [
   '/',
   '/index.html',

@@ -139,21 +139,36 @@ body {
   overflow: hidden;
 }
 
-/* Ambient dynamic background lighting */
+/* Ambient dynamic background lighting — Apple Music-style Living Mesh */
 .ambient-glow {
-  position: absolute;
-  top: -20%;
-  right: -10%;
-  width: 650px;
-  height: 650px;
-  background: radial-gradient(circle, rgba(229, 185, 95, 0.10) 0%, rgba(229, 185, 95, 0.03) 45%, transparent 70%);
-  filter: blur(80px);
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 0.28;
   pointer-events: none;
   z-index: 0;
+  overflow: hidden;
   transition: opacity 1s ease;
   transform: translateZ(0);
-  will-change: transform, opacity;
   backface-visibility: hidden;
+}
+
+.ambient-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 25%, rgba(7, 9, 14, 0.22) 0%, rgba(7, 9, 14, 0.68) 100%);
+  pointer-events: none;
+}
+
+.ambient-glow .living-mesh-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: blur(42px) saturate(1.12);
+  transform: scale(1.12) translateZ(0);
+  will-change: transform;
 }
 
 /* Apple-style Sidebar */
@@ -363,22 +378,22 @@ body {
 }
 
 .btn-apple-primary {
-  background: linear-gradient(135deg, #e5b95f, #c99839);
+  background: var(--accent-gradient-master, linear-gradient(135deg, #e5b95f, #c99839));
   color: #0c0f14;
   border: none;
   font-weight: 700;
-  box-shadow: 0 4px 16px rgba(229, 185, 95, 0.35);
+  box-shadow: 0 4px 16px var(--accent-gold-glow);
 }
 
 .btn-apple-primary:hover {
-  background: linear-gradient(135deg, #f5cb78, #d4a342);
-  box-shadow: 0 6px 20px rgba(229, 185, 95, 0.5);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px var(--accent-gold-glow);
 }
 
 /* Audiophile Status Banner */
 .audiophile-banner {
-  background: linear-gradient(135deg, rgba(28, 33, 46, 0.8), rgba(18, 22, 32, 0.9));
-  border: 1px solid rgba(229, 185, 95, 0.3);
+  background: linear-gradient(135deg, rgba(28, 33, 46, 0.84), rgba(16, 20, 29, 0.92));
+  border: 1px solid var(--accent-alpha30, rgba(229, 185, 95, 0.3));
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   display: flex;
@@ -399,7 +414,7 @@ body {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, #e5b95f, rgba(229, 185, 95, 0.25), transparent);
+  background: linear-gradient(90deg, var(--accent-gold), var(--accent-alpha25, rgba(229, 185, 95, 0.25)), transparent);
 }
 
 .banner-left {
@@ -412,8 +427,8 @@ body {
   width: 48px;
   height: 48px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(229, 185, 95, 0.2), rgba(212, 175, 55, 0.05));
-  border: 1px solid rgba(229, 185, 95, 0.4);
+  background: linear-gradient(135deg, var(--accent-alpha20, rgba(229, 185, 95, 0.2)), var(--accent-alpha06, rgba(212, 175, 55, 0.05)));
+  border: 1px solid var(--accent-alpha40, rgba(229, 185, 95, 0.4));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -453,7 +468,8 @@ body {
 }
 
 .spec-chip.gold {
-  border-color: rgba(229, 185, 95, 0.4);
+  border-color: var(--accent-alpha40, rgba(229, 185, 95, 0.4));
+  background: var(--accent-alpha08, rgba(0, 0, 0, 0.4));
   color: var(--accent-gold);
 }
 
@@ -498,8 +514,8 @@ body {
 }
 
 .track-row.playing {
-  background: rgba(229, 185, 95, 0.08);
-  border-color: rgba(229, 185, 95, 0.2);
+  background: var(--accent-alpha08, rgba(229, 185, 95, 0.08));
+  border-color: var(--accent-alpha20, rgba(229, 185, 95, 0.2));
 }
 
 .track-table td {
@@ -798,10 +814,10 @@ body {
   font-size: 9.5px;
   font-weight: 700;
   color: var(--accent-gold);
-  background: rgba(229, 185, 95, 0.12);
+  background: var(--accent-alpha12, rgba(229, 185, 95, 0.12));
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(229, 185, 95, 0.3);
+  border: 1px solid var(--accent-alpha30, rgba(229, 185, 95, 0.3));
   margin-top: 4px;
   width: fit-content;
   transition: all 0.3s ease;

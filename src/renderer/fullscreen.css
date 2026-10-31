@@ -25,20 +25,26 @@
 
 .fs-backdrop {
   position: absolute;
-  inset: -80px;
-  background: radial-gradient(circle at 50% 40%, #1a2030 0%, #07090e 70%);
-  background-size: cover;
-  background-position: center;
-  filter: blur(70px) saturate(1.3) brightness(0.7);
-  transition: background-image 0.8s var(--ease-inout);
+  inset: -48px;
+  background: radial-gradient(circle at 50% 40%, #1a2030 0%, #07090e 75%);
+  overflow: hidden;
   transform: translateZ(0);
   will-change: transform;
   backface-visibility: hidden;
 }
+.fs-backdrop .living-mesh-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: blur(36px) saturate(1.32) brightness(0.92);
+  transform: scale(1.10) translateZ(0);
+  will-change: transform;
+}
 .fs-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(7, 9, 14, 0.35) 0%, rgba(7, 9, 14, 0.7) 100%);
+  background: radial-gradient(circle at 50% 38%, rgba(7, 9, 14, 0.14) 0%, rgba(7, 9, 14, 0.56) 100%);
+  pointer-events: none;
 }
 
 .fs-close {
@@ -101,8 +107,8 @@
   padding: 3px 9px;
   border-radius: 6px;
   color: var(--accent-gold);
-  background: rgba(229, 185, 95, 0.12);
-  border: 1px solid rgba(229, 185, 95, 0.3);
+  background: var(--accent-alpha16);
+  border: 1px solid var(--accent-alpha35);
 }
 .fs-tag.flac-neon {
   color: #2ee677;
@@ -340,16 +346,21 @@
 
 .ls-backdrop {
   position: absolute;
-  inset: -30px;
-  background: radial-gradient(circle at 50% 30%, #1a2030 0%, #07090e 70%);
-  background-size: cover;
-  background-position: center;
-  filter: blur(40px) saturate(1.4) brightness(0.65);
-  transition: background-image 0.8s var(--ease-inout);
+  inset: -18px;
+  background: radial-gradient(circle at 50% 30%, #1a2030 0%, #07090e 75%);
+  overflow: hidden;
   pointer-events: none;
   transform: translateZ(0);
   will-change: transform;
   backface-visibility: hidden;
+}
+
+.ls-backdrop .living-mesh-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: blur(22px) saturate(1.3) brightness(0.92);
+  transform: scale(1.12) translateZ(0);
 }
 
 .ls-scrim {
@@ -429,8 +440,8 @@
   padding: 2px 7px;
   border-radius: 5px;
   color: var(--accent-gold);
-  background: rgba(229, 185, 95, 0.12);
-  border: 1px solid rgba(229, 185, 95, 0.35);
+  background: var(--accent-alpha16);
+  border: 1px solid var(--accent-alpha35);
   width: fit-content;
   white-space: nowrap;
 }
@@ -480,7 +491,7 @@
   border-radius: 5px;
   outline: none;
   cursor: pointer;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0.85) var(--p, 0%), rgba(255, 255, 255, 0.16) var(--p, 0%));
+  background: linear-gradient(to right, var(--accent-gold) var(--p, 0%), rgba(255, 255, 255, 0.16) var(--p, 0%));
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
   transition: height 0.2s var(--ease-out);
