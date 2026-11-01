@@ -105,7 +105,7 @@
 
   function haptic(ms = 12) {
     if (navigator.vibrate) {
-      try { navigator.vibrate(ms); } catch (e) {}
+      try { navigator.vibrate(ms); } catch (e) { }
     }
   }
 
@@ -178,7 +178,7 @@
     activeOrigin = nextOrigin.replace(/\/+$/, '');
     try {
       localStorage.setItem('aura.lastActiveOrigin', activeOrigin);
-    } catch (e) {}
+    } catch (e) { }
 
     if (info) {
       applyNetworkInfo(info, true);
@@ -209,7 +209,7 @@
       if (Array.isArray(info.adapters)) {
         localStorage.setItem('aura.remoteAdapters', JSON.stringify(info.adapters.map(a => a.url).filter(Boolean)));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // If desktop switched to a new Wi-Fi IP while connected, seamlessly follow the new origin
     if (!skipSwitchCheck && info.url && info.ip && info.ip !== '127.0.0.1') {
@@ -222,7 +222,7 @@
             if (verified) switchActiveHost(targetOrigin, verified);
           });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -243,7 +243,7 @@
           return data;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return null;
   }
 
@@ -272,13 +272,13 @@
           if (!e || !e.candidate || !e.candidate.candidate) return;
           const m = e.candidate.candidate.match(/((?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3})\.\d{1,3}/);
           if (m && m[1]) {
-            try { pc.close(); } catch (err) {}
+            try { pc.close(); } catch (err) { }
             done(m[1]);
           }
         };
         pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => done(null));
         setTimeout(() => {
-          try { pc.close(); } catch (err) {}
+          try { pc.close(); } catch (err) { }
           done(null);
         }, 500);
       } catch (e) {
@@ -309,9 +309,9 @@
         if (savedAuraLocal) fastCandidates.add(new URL(savedAuraLocal).origin);
         const savedAdapters = JSON.parse(localStorage.getItem('aura.remoteAdapters') || '[]');
         savedAdapters.forEach(u => {
-          try { fastCandidates.add(new URL(u).origin); } catch (e) {}
+          try { fastCandidates.add(new URL(u).origin); } catch (e) { }
         });
-      } catch (e) {}
+      } catch (e) { }
 
       // Phase 1: Parallel probe of mDNS & cached origins
       const phase1Results = await Promise.all(
@@ -339,7 +339,7 @@
         if (prefix && !subnets.includes(prefix)) subnets.push(prefix);
       };
 
-      try { addSubnet(extractIpv4Prefix(new URL(activeOrigin).hostname)); } catch (e) {}
+      try { addSubnet(extractIpv4Prefix(new URL(activeOrigin).hostname)); } catch (e) { }
       addSubnet(extractIpv4Prefix(location.hostname));
       const rtcPrefix = await detectWebRtcSubnetPrefix();
       addSubnet(rtcPrefix);
@@ -407,7 +407,7 @@
         ws.onclose = null;
         ws.close();
       }
-    } catch (e) {}
+    } catch (e) { }
 
     ws = new WebSocket(wsUrl);
 
@@ -416,7 +416,7 @@
       failedReconnects = 0;
       try {
         localStorage.setItem('aura.lastActiveOrigin', activeOrigin);
-      } catch (e) {}
+      } catch (e) { }
       statusDot.className = 'status-indicator live';
       statusText.textContent = activeSsid ? `WI-FI: ${activeSsid.toUpperCase()}` : 'WI-FI LINK ACTIVE';
       toast.classList.remove('visible');
@@ -462,7 +462,7 @@
     };
 
     ws.onerror = () => {
-      try { ws.close(); } catch (e) {}
+      try { ws.close(); } catch (e) { }
     };
   }
 
@@ -482,7 +482,7 @@
 
   // Register App-Shell Service Worker so saved bookmarks / PWAs boot offline even when IP changes
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch(() => { });
   }
 
   // Dispatch commands to desktop
@@ -533,7 +533,7 @@
     // Filter by query
     if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(t => 
+      filtered = filtered.filter(t =>
         (t.title && t.title.toLowerCase().includes(q)) ||
         (t.artist && t.artist.toLowerCase().includes(q)) ||
         (t.album && t.album.toLowerCase().includes(q)) ||
@@ -727,15 +727,10 @@
       volumeSlider.value = v;
       volumeVal.textContent = `${v}%`;
     }
-    if (data.activeThemeId) {
-      state.activeThemeId = data.activeThemeId;
-      document.documentElement.setAttribute('data-theme', data.activeThemeId);
-    }
     if (data.subBass !== undefined) {
       meshTargetSubBass = state.isPlaying ? Math.max(0, Math.min(1, data.subBass)) : 0;
     }
     if (Array.isArray(data.meshPalette) && data.meshPalette.length === 4) {
-      hasServerMeshPalette = true;
       setRemoteMeshPalette(data.meshPalette);
     }
     updateProgressUI();
@@ -759,12 +754,8 @@
       trackAlbum.textContent = state.album || '';
     }
 
-    // Album Artwork, Master Edition Theme & Living Mesh Palette Sync
-    if (state.activeThemeId) {
-      document.documentElement.setAttribute('data-theme', state.activeThemeId);
-    }
+    // Album Artwork & Living Mesh Palette Sync
     if (Array.isArray(newState.meshPalette) && newState.meshPalette.length === 4) {
-      hasServerMeshPalette = true;
       setRemoteMeshPalette(newState.meshPalette);
     }
     if (newState.subBass !== undefined) {
@@ -871,16 +862,15 @@
   let meshPhase = Math.random() * 100;
   let meshLastFrameTime = performance.now();
   let meshCtx = null;
-  let hasServerMeshPalette = false;
   let lastExtractedCoverSrc = '';
   const meshSamplerCanvas = document.createElement('canvas');
   meshSamplerCanvas.width = 48;
   meshSamplerCanvas.height = 48;
 
   if (remoteMeshCanvas) {
-    remoteMeshCanvas.width = 144;
-    remoteMeshCanvas.height = 144;
-    meshCtx = remoteMeshCanvas.getContext('2d', { alpha: false });
+    remoteMeshCanvas.width = 180;
+    remoteMeshCanvas.height = 180;
+    meshCtx = remoteMeshCanvas.getContext('2d');
   }
 
   function rgbToHslRemote(r, g, b) {
@@ -1013,13 +1003,12 @@
         return hslToRgbRemote(h, Math.min(0.88, s * 1.18 + 0.06), Math.max(0.24, Math.min(0.50, l)));
       });
       setRemoteMeshPalette(calibrated);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   if (albumCover) {
     albumCover.addEventListener('load', () => {
-      // Only run local cover extraction as fallback if Desktop hasn't sent its Master-Edition-aligned meshPalette
-      if (!hasServerMeshPalette && albumCover.src && albumCover.src !== lastExtractedCoverSrc) {
+      if (albumCover.src && albumCover.src !== lastExtractedCoverSrc) {
         lastExtractedCoverSrc = albumCover.src;
         extractCoverPaletteRemote(albumCover);
       }
@@ -1039,9 +1028,9 @@
     meshSmoothSubBass += (effectiveTarget - meshSmoothSubBass) * (1 - Math.exp(-dt * bassRate));
     const energy = Math.max(0, Math.min(1, meshSmoothSubBass));
 
-    meshPhase += dt * (0.42 + energy * 1.55);
+    meshPhase += dt * (0.65 + energy * 1.95);
 
-    const lerp = 1 - Math.exp(-dt * 2.5);
+    const lerp = 1 - Math.exp(-dt * 3.2);
     for (let i = 0; i < 4; i++) {
       meshCurrentColors[i][0] += (meshTargetColors[i][0] - meshCurrentColors[i][0]) * lerp;
       meshCurrentColors[i][1] += (meshTargetColors[i][1] - meshCurrentColors[i][1]) * lerp;

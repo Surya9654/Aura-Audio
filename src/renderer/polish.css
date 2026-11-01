@@ -580,13 +580,29 @@ input[type="range"] {
 .track-row:hover .track-thumb { transform: scale(1.06); }
 img.track-thumb { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
 
-/* Now playing artwork crossfade */
+/* Now playing bar optical blur transition on track change */
 .now-playing-art { overflow: hidden; transition: transform 0.6s var(--ease-out); border-radius: 10px; }
 .now-playing-art:hover { transform: scale(1.05); }
-.now-playing-art img { animation: artIn 0.7s var(--ease-out) both; }
-@keyframes artIn { from { opacity: 0; transform: scale(1.12); } to { opacity: 1; transform: scale(1); } }
-.now-playing-title, .now-playing-artist, .hi-res-telemetry-tag { animation: textIn 0.6s var(--ease-out) both; }
-@keyframes textIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.now-playing-art img { animation: artBlurIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes artBlurIn {
+  from { filter: blur(12px) saturate(1.2); transform: scale(1.12); opacity: 0.65; }
+  to   { filter: blur(0px) saturate(1); transform: scale(1); opacity: 1; }
+}
+.now-playing-title, .now-playing-artist, .hi-res-telemetry-tag { animation: textBlurIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.now-playing-meta.blur-swap .now-playing-title,
+.now-playing-meta.blur-swap .now-playing-artist,
+.now-playing-meta.blur-swap .hi-res-telemetry-tag {
+  animation: textBlurSwap 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes textBlurIn {
+  from { filter: blur(8px); opacity: 0.35; transform: translateY(3px); }
+  to   { filter: blur(0px); opacity: 1; transform: translateY(0); }
+}
+@keyframes textBlurSwap {
+  0%   { filter: blur(0px); opacity: 1; }
+  38%  { filter: blur(9px); opacity: 0.35; }
+  100% { filter: blur(0px); opacity: 1; }
+}
 
 /* Living Mesh ambient backdrop stays pixel-locked to viewport; fluid drift happens inside canvas */
 .ambient-glow { transition: opacity 1.0s var(--ease-inout); animation: none; }

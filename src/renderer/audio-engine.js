@@ -136,7 +136,9 @@ export class HighResAudioEngine {
     // Leaf node tap: adds zero latency or coloration to the master signal path
     this.subBassAnalyser = this.audioContext.createAnalyser();
     this.subBassAnalyser.fftSize = 4096;
-    this.subBassAnalyser.smoothingTimeConstant = 0.64;
+    this.subBassAnalyser.minDecibels = -85;
+    this.subBassAnalyser.maxDecibels = -18;
+    this.subBassAnalyser.smoothingTimeConstant = 0.58;
 
     // Master Output Gain
     this.gainNode = this.audioContext.createGain();
@@ -528,10 +530,11 @@ export class HighResAudioEngine {
   }
 
   setPreamp(dbGain) {
-    this.preampDb = dbGain;
+    const clamped = Math.max(-12, Math.min(10, parseFloat(dbGain) || 0));
+    this.preampDb = clamped;
     if (this.preampNode && this.audioContext) {
-      // dB to linear gain
-      const linear = Math.pow(10, dbGain / 20);
+      // dB to linear gain (-12.0 dB to +10.0 dB max headroom boost)
+      const linear = Math.pow(10, clamped / 20);
       this.preampNode.gain.setTargetAtTime(linear, this.audioContext.currentTime, 0.05);
     }
   }
@@ -801,9 +804,9 @@ export class HighResAudioEngine {
     const avgVal = weightTotal > 0 ? (weightedSum / weightTotal) : 0;
     const combined = (avgVal * 0.62 + peakVal * 0.38) / 255;
 
-    // Noise-floor gate + nonlinear dynamic curve so kicks bloom cleanly without constant wash
-    const gated = Math.max(0, Math.min(1, (combined - 0.16) / 0.68));
-    const target = Math.pow(gated, 1.28);
+    // Noise-floor gate + punchy curve so 32–120 Hz bass kicks visibly drive the Living Mesh
+    const gated = Math.max(0, Math.min(1, (combined - 0.08) / 0.56));
+    const target = Math.pow(gated, 1.08);
 
     // Fast transient attack (~45ms), silky liquid release (~230ms)
     const rate = target > this.subBassSmooth ? 22.0 : 4.4;

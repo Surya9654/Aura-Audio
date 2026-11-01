@@ -1,35 +1,35 @@
 // Apple Music-Style "Living Mesh" Backdrop Engine — Aligned with Master Edition Personalisation
 // Extracts 4 dominant palette clusters from the current FLAC album artwork onto an offscreen canvas,
-// maps them cleanly onto your active Master Edition Personalisation hue (or natural dark-graded cover colors),
-// and animates multi-layered fluid blobs modulated by real-time 32–120 Hz sub-bass energy.
+// animates multi-layered fluid radial blobs across Fullscreen, Studio, Lockscreen & Mobile Remote,
+// and pulses organically with real-time 32–120 Hz sub-bass energy.
 
 export const MASTER_THEME_PALETTES = {
   'gold': {
-    // Master Gold: 24K Gold, Burnished Bronze, Warm Amber, Deep Obsidian
-    hues: [0.108, 0.114, 0.088, 0.122],
-    sats: [0.68, 0.78, 0.72, 0.64],
-    lights: [0.12, 0.34, 0.24, 0.28],
+    // Master Gold: Rich Bronze Base, 24K Burnished Gold, Warm Honey Amber, Champagne Highlight
+    hues: [0.098, 0.112, 0.082, 0.126],
+    sats: [0.76, 0.88, 0.84, 0.78],
+    lights: [0.22, 0.52, 0.40, 0.46],
     isAchromatic: false
   },
   'blood-red': {
-    // Blood Red: Velvet Crimson, Deep Ruby, Burgundy, Garnet
-    hues: [0.972, 0.978, 0.955, 0.988],
-    sats: [0.76, 0.86, 0.80, 0.72],
-    lights: [0.12, 0.34, 0.22, 0.28],
+    // Blood Red: Deep Velvet Crimson, Scarlet Ruby, Warm Garnet, Rose Ember
+    hues: [0.972, 0.980, 0.952, 0.992],
+    sats: [0.84, 0.92, 0.86, 0.80],
+    lights: [0.22, 0.50, 0.38, 0.44],
     isAchromatic: false
   },
   'spotify-green': {
-    // Spotify Green: Forest Obsidian, Electric Emerald, Lush Jade, Mint-Emerald
-    hues: [0.392, 0.392, 0.415, 0.375],
-    sats: [0.72, 0.82, 0.76, 0.68],
-    lights: [0.11, 0.31, 0.21, 0.26],
+    // Spotify Green: Deep Viridian, Electric Studio Emerald, Lush Jade, Mint Glow
+    hues: [0.392, 0.392, 0.422, 0.368],
+    sats: [0.80, 0.90, 0.84, 0.76],
+    lights: [0.20, 0.47, 0.36, 0.42],
     isAchromatic: false
   },
   'platinum': {
-    // Liquid Platinum: Aerospace Titanium, Brushed Silver, Cool Slate, Ice Mist
-    hues: [0.595, 0.595, 0.605, 0.585],
-    sats: [0.16, 0.14, 0.18, 0.10],
-    lights: [0.11, 0.34, 0.22, 0.28],
+    // Liquid Platinum: Slate Titanium, Brushed Aerospace Silver, Cool Steel, Ice Mist
+    hues: [0.595, 0.595, 0.610, 0.580],
+    sats: [0.20, 0.18, 0.22, 0.14],
+    lights: [0.22, 0.52, 0.38, 0.46],
     isAchromatic: true
   }
 };
@@ -92,15 +92,15 @@ function buildThemeHarmonizedPalette(themeId, rawCoverColors) {
     return buildPureThemePalette(themeId);
   }
 
-  // Map the album cover's extracted luminance & energy contour strictly onto the
-  // active Master Edition hue family in HSL space — zero muddy RGB cross-hue collisions!
+  // Maps the album cover's luminance & saturation energy onto the active Master Edition
+  // hue family in HSL space — rich, clearly visible, and free of cross-hue muddying.
   return [0, 1, 2, 3].map((i) => {
     const [, coverS, coverL] = rgbToHsl(rawCoverColors[i][0], rawCoverColors[i][1], rawCoverColors[i][2]);
     const h = spec.hues[i];
     const s = spec.isAchromatic
       ? spec.sats[i]
-      : Math.max(spec.sats[i] * 0.85, Math.min(0.92, spec.sats[i] * 0.75 + coverS * 0.30));
-    const l = Math.max(0.09, Math.min(0.38, spec.lights[i] * 0.72 + coverL * 0.28));
+      : Math.max(spec.sats[i] * 0.88, Math.min(0.95, spec.sats[i] * 0.78 + coverS * 0.26));
+    const l = Math.max(0.18, Math.min(0.56, spec.lights[i] * 0.78 + coverL * 0.26));
     return hslToRgb(h, s, l);
   });
 }
@@ -122,8 +122,8 @@ function hueDistance(h1, h2) {
 }
 
 /**
- * Extracts 4 chromatically distinct dominant colors from an HTMLImageElement
- * using a 48x48 offscreen sampling canvas, calibrated for dark-studio contrast.
+ * Extracts 4 chromatically distinct, vibrant dominant colors from an HTMLImageElement
+ * using a 48x48 offscreen sampling canvas.
  */
 export function extractPaletteFromImage(img, samplerCanvas) {
   const size = 48;
@@ -142,7 +142,7 @@ export function extractPaletteFromImage(img, samplerCanvas) {
 
   for (let i = 0; i < data.length; i += 4) {
     const a = data[i + 3];
-    if (a < 140) continue;
+    if (a < 128) continue;
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
@@ -169,11 +169,11 @@ export function extractPaletteFromImage(img, samplerCanvas) {
     const [h, s, l] = rgbToHsl(r, g, bl);
     if (s > maxObservedSat) maxObservedSat = s;
 
-    const lumPenalty = (l < 0.07 || l > 0.94)
-      ? 0.12
-      : (1 - Math.abs(l - 0.45) * 0.55);
+    const lumPenalty = (l < 0.06 || l > 0.95)
+      ? 0.14
+      : (1 - Math.abs(l - 0.48) * 0.50);
 
-    const score = Math.pow(b.count, 0.72) * (0.32 + s * 2.1) * Math.max(0.1, lumPenalty);
+    const score = Math.pow(b.count, 0.72) * (0.35 + s * 2.2) * Math.max(0.12, lumPenalty);
     candidates.push({ rgb: [r, g, bl], hsl: [h, s, l], count: b.count, baseScore: score });
   }
 
@@ -219,35 +219,35 @@ export function extractPaletteFromImage(img, samplerCanvas) {
   }
 
   while (chosen.length < 4) {
-    const base = chosen[chosen.length - 1] || { hsl: [0.11, 0.55, 0.30] };
+    const base = chosen[chosen.length - 1] || { hsl: [0.11, 0.65, 0.42] };
     const [h, s, l] = base.hsl;
     const nextH = (h + 0.14 * chosen.length) % 1;
-    const nextL = Math.max(0.14, Math.min(0.38, l + (chosen.length % 2 === 0 ? 0.08 : -0.08)));
+    const nextL = Math.max(0.22, Math.min(0.55, l + (chosen.length % 2 === 0 ? 0.10 : -0.08)));
     chosen.push({ hsl: [nextH, s, nextL], rgb: hslToRgb(nextH, s, nextL) });
   }
 
-  // Calibrate into deep dark-studio lightness (0.12..0.38) so text & glass UI stay razor-sharp
+  // Calibrate into luminous Apple Music Living Mesh range (0.18..0.60)
   return chosen.map((item, idx) => {
     let [h, s, l] = item.hsl;
     if (isMonochrome) {
-      const targetLights = [0.12, 0.30, 0.22, 0.18];
-      l = l * 0.40 + targetLights[idx] * 0.60;
-      s = Math.min(0.12, s);
+      const targetLights = [0.18, 0.44, 0.32, 0.26];
+      l = l * 0.45 + targetLights[idx] * 0.55;
+      s = Math.min(0.14, s);
       return hslToRgb(h, s, l);
     }
 
     if (idx === 0) {
-      s = Math.min(0.82, s * 1.12 + 0.06);
-      l = Math.max(0.11, Math.min(0.24, l * 0.62));
+      s = Math.min(0.88, s * 1.18 + 0.08);
+      l = Math.max(0.18, Math.min(0.36, l * 0.80));
     } else if (idx === 1) {
-      s = Math.min(0.90, s * 1.20 + 0.10);
-      l = Math.max(0.24, Math.min(0.40, l * 0.85));
+      s = Math.min(0.96, s * 1.28 + 0.12);
+      l = Math.max(0.38, Math.min(0.60, l * 1.06 + 0.05));
     } else if (idx === 2) {
-      s = Math.min(0.86, s * 1.15 + 0.06);
-      l = Math.max(0.18, Math.min(0.35, l * 0.78));
+      s = Math.min(0.92, s * 1.22 + 0.10);
+      l = Math.max(0.30, Math.min(0.54, l * 0.98 + 0.03));
     } else {
-      s = Math.min(0.84, s * 1.12 + 0.05);
-      l = Math.max(0.16, Math.min(0.32, l * 0.74));
+      s = Math.min(0.90, s * 1.18 + 0.08);
+      l = Math.max(0.26, Math.min(0.50, l * 0.94 + 0.02));
     }
     return hslToRgb(h, s, l);
   });
@@ -269,7 +269,9 @@ export class LivingMeshController {
 
     this.activeThemeId = localStorage.getItem('aura.masterTheme') || 'gold';
     const savedMode = localStorage.getItem('aura.backdropMode');
-    this.backdropMode = (savedMode === 'artwork' || savedMode === 'harmonized') ? savedMode : 'harmonized';
+    // Default to 'artwork' so Fullscreen & Remote dynamically extract 4 cover colors out-of-the-box,
+    // while Main Studio stays aligned with the selected Master Edition Personalisation hue!
+    this.backdropMode = (savedMode === 'harmonized' || savedMode === 'artwork') ? savedMode : 'artwork';
 
     const initial = buildPureThemePalette(this.activeThemeId);
     this.ambientCurrentColors = clonePalette(initial);
@@ -292,7 +294,6 @@ export class LivingMeshController {
 
     this.phase = Math.random() * 100;
     this.lastTime = 0;
-    this.ambientFrameToggle = 0;
     this.rafId = null;
   }
 
@@ -307,30 +308,31 @@ export class LivingMeshController {
     this.floatingOverlayEl = document.getElementById('floating-widget-overlay');
 
     if (this.fsCanvas) {
-      this.fsCanvas.width = 168;
-      this.fsCanvas.height = 168;
-      this.fsCtx = this.fsCanvas.getContext('2d', { alpha: false });
+      this.fsCanvas.width = 220;
+      this.fsCanvas.height = 220;
+      this.fsCtx = this.fsCanvas.getContext('2d');
     }
 
     if (this.ambientCanvas) {
-      this.ambientCanvas.width = 136;
-      this.ambientCanvas.height = 136;
-      this.ambientCtx = this.ambientCanvas.getContext('2d', { alpha: false });
+      this.ambientCanvas.width = 180;
+      this.ambientCanvas.height = 180;
+      this.ambientCtx = this.ambientCanvas.getContext('2d');
     }
 
     if (this.lsCanvas) {
-      this.lsCanvas.width = 96;
-      this.lsCanvas.height = 64;
-      this.lsCtx = this.lsCanvas.getContext('2d', { alpha: false });
+      this.lsCanvas.width = 128;
+      this.lsCanvas.height = 84;
+      this.lsCtx = this.lsCanvas.getContext('2d');
     }
 
     if (this.flsCanvas) {
-      this.flsCanvas.width = 96;
-      this.flsCanvas.height = 64;
-      this.flsCtx = this.flsCanvas.getContext('2d', { alpha: false });
+      this.flsCanvas.width = 128;
+      this.flsCanvas.height = 84;
+      this.flsCtx = this.flsCanvas.getContext('2d');
     }
 
-    this.recomputeTargets();
+    this.recomputeTargets(true);
+    this.renderImmediateFrame();
     this.start();
   }
 
@@ -338,6 +340,7 @@ export class LivingMeshController {
     const validId = MASTER_THEME_PALETTES[themeId] ? themeId : 'gold';
     this.activeThemeId = validId;
     this.recomputeTargets();
+    this.renderImmediateFrame();
   }
 
   setBackdropMode(mode) {
@@ -345,29 +348,34 @@ export class LivingMeshController {
     this.backdropMode = mode;
     localStorage.setItem('aura.backdropMode', mode);
     this.recomputeTargets();
+    this.renderImmediateFrame();
   }
 
   getBackdropMode() {
     return this.backdropMode;
   }
 
-  recomputeTargets() {
-    // 1. Studio / Main Window backdrop ALWAYS honors your Master Edition Personalisation hue family
-    //    (modulated in luminance/depth by the playing album cover) so Blood Red, Spotify Green,
-    //    Master Gold, and Liquid Platinum NEVER clash or muddy into olive/brown!
+  recomputeTargets(snapImmediately = false) {
     const themeAligned = this.hasRealCover && this.rawCoverColors
       ? buildThemeHarmonizedPalette(this.activeThemeId, this.rawCoverColors)
       : buildPureThemePalette(this.activeThemeId);
 
+    // Studio window always aligns with the selected Master Edition Personalisation hue
+    // so Blood Red / Spotify Green / Master Gold / Liquid Platinum never clash with cards
     this.ambientTargetColors = clonePalette(themeAligned);
 
-    // 2. Fullscreen & Mobile Remote:
-    //    - 'harmonized' (Master Theme Aligned — Default): uses the Master Edition hue-aligned 4-stop palette
-    //    - 'artwork' (Album Cover Colors): uses the 4 dark-calibrated dominant colors from the FLAC cover
+    // Fullscreen, Lockscreen Widget, and Mobile Remote:
+    // - 'artwork': vibrant 4-color Living Mesh extracted from the FLAC album cover (fallback: Master Theme)
+    // - 'harmonized': locks Fullscreen & Remote strictly to your selected Master Edition hue
     if (this.backdropMode === 'artwork' && this.hasRealCover && this.rawCoverColors) {
       this.fsTargetColors = clonePalette(this.rawCoverColors);
     } else {
       this.fsTargetColors = clonePalette(themeAligned);
+    }
+
+    if (snapImmediately) {
+      this.ambientCurrentColors = clonePalette(this.ambientTargetColors);
+      this.fsCurrentColors = clonePalette(this.fsTargetColors);
     }
 
     this.emitPalette();
@@ -407,25 +415,53 @@ export class LivingMeshController {
     }
 
     const requestUrl = coverUrl;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const extracted = extractPaletteFromImage(img, this.samplerCanvas);
-        if (this.paletteCache.size >= 80) {
-          const oldestKey = this.paletteCache.keys().next().value;
-          this.paletteCache.delete(oldestKey);
-        }
-        this.paletteCache.set(requestUrl, extracted);
-        if (this.currentUrl === requestUrl) {
-          this.rawCoverColors = clonePalette(extracted);
-          this.recomputeTargets();
-        }
-      } catch (e) {
-        console.warn('[LivingMesh] Palette extraction fallback:', e);
+    const loadImage = (useCors) => {
+      const img = new Image();
+      if (useCors) {
+        img.crossOrigin = 'anonymous';
       }
+      img.onload = () => {
+        try {
+          const extracted = extractPaletteFromImage(img, this.samplerCanvas);
+          if (this.paletteCache.size >= 80) {
+            const oldestKey = this.paletteCache.keys().next().value;
+            this.paletteCache.delete(oldestKey);
+          }
+          this.paletteCache.set(requestUrl, extracted);
+          if (this.currentUrl === requestUrl) {
+            this.rawCoverColors = clonePalette(extracted);
+            this.recomputeTargets();
+          }
+        } catch (e) {
+          console.warn('[LivingMesh] Palette extraction fallback:', e);
+        }
+      };
+      img.onerror = () => {
+        if (useCors) {
+          loadImage(false);
+        }
+      };
+      img.src = coverUrl;
     };
-    img.src = coverUrl;
+
+    // Only set crossOrigin on remote HTTP(S) URLs — setting it on file:// or data: URLs breaks Electron image loads
+    loadImage(/^https?:\/\//i.test(coverUrl));
+  }
+
+  renderImmediateFrame() {
+    const energy = Math.max(0, Math.min(1, this.getSubBassEnergy() || 0));
+    if (this.ambientCtx && this.ambientCanvas) {
+      this.renderMesh(this.ambientCtx, this.ambientCanvas.width, this.ambientCanvas.height, this.ambientCurrentColors, energy, 0.88);
+    }
+    if (this.fsCtx && this.fsCanvas) {
+      this.renderMesh(this.fsCtx, this.fsCanvas.width, this.fsCanvas.height, this.fsCurrentColors, energy, 1.0);
+    }
+    if (this.lsCtx && this.lsCanvas) {
+      this.renderMesh(this.lsCtx, this.lsCanvas.width, this.lsCanvas.height, this.fsCurrentColors, energy, 0.96);
+    }
+    if (this.flsCtx && this.flsCanvas) {
+      this.renderMesh(this.flsCtx, this.flsCanvas.width, this.flsCanvas.height, this.fsCurrentColors, energy, 0.96);
+    }
   }
 
   start() {
@@ -444,10 +480,9 @@ export class LivingMeshController {
 
       const energy = Math.max(0, Math.min(1, this.getSubBassEnergy() || 0));
 
-      // Organic drift speed: meditative idle flow + sub-bass kinetic swell
-      this.phase += dt * (0.42 + energy * 1.55);
+      // Noticeable Apple Music fluid drift at idle + energetic swell on sub-bass hits
+      this.phase += dt * (0.65 + energy * 1.95);
 
-      // Smoothly crossfade 4 palette colors (~0.75s transition on theme or track change)
       const lerp = 1 - Math.exp(-dt * 3.8);
       for (let i = 0; i < 4; i++) {
         for (let ch = 0; ch < 3; ch++) {
@@ -458,28 +493,27 @@ export class LivingMeshController {
 
       const isFsOpen = !!(this.fsPlayerEl && this.fsPlayerEl.classList.contains('open'));
 
+      if (this.ambientCtx && !isFsOpen) {
+        this.renderMesh(this.ambientCtx, this.ambientCanvas.width, this.ambientCanvas.height, this.ambientCurrentColors, energy, 0.88);
+      }
+
       if (isFsOpen && this.fsCtx) {
-        this.renderMesh(this.fsCtx, this.fsCanvas.width, this.fsCanvas.height, this.fsCurrentColors, energy, 0.95);
+        this.renderMesh(this.fsCtx, this.fsCanvas.width, this.fsCanvas.height, this.fsCurrentColors, energy, 1.0);
         if (this.fsArtEl) {
           const c1 = this.fsCurrentColors[1];
-          const glowAlpha = (0.32 + energy * 0.36).toFixed(3);
-          const spread = Math.round(58 + energy * 40);
+          const glowAlpha = (0.38 + energy * 0.42).toFixed(3);
+          const spread = Math.round(64 + energy * 52);
           this.fsArtEl.style.boxShadow =
             `0 30px 80px rgba(0, 0, 0, 0.65), 0 0 ${spread}px rgba(${Math.round(c1[0])}, ${Math.round(c1[1])}, ${Math.round(c1[2])}, ${glowAlpha}), 0 0 0 1px rgba(255, 255, 255, 0.14)`;
         }
-      } else {
-        // Render subtle dark-studio aura & visible lockscreen widgets at 30 FPS
-        this.ambientFrameToggle = (this.ambientFrameToggle + 1) & 1;
-        if (this.ambientFrameToggle === 0) {
-          if (this.ambientCtx) {
-            this.renderMesh(this.ambientCtx, this.ambientCanvas.width, this.ambientCanvas.height, this.ambientCurrentColors, energy, 0.58);
-          }
-          if (this.lsCtx && this.viewDacEl && this.viewDacEl.classList.contains('active')) {
-            this.renderMesh(this.lsCtx, this.lsCanvas.width, this.lsCanvas.height, this.fsCurrentColors, energy, 0.92);
-          }
-          if (this.flsCtx && this.floatingOverlayEl && this.floatingOverlayEl.classList.contains('active')) {
-            this.renderMesh(this.flsCtx, this.flsCanvas.width, this.flsCanvas.height, this.fsCurrentColors, energy, 0.92);
-          }
+      }
+
+      if (!isFsOpen) {
+        if (this.lsCtx && this.viewDacEl && this.viewDacEl.classList.contains('active')) {
+          this.renderMesh(this.lsCtx, this.lsCanvas.width, this.lsCanvas.height, this.fsCurrentColors, energy, 0.96);
+        }
+        if (this.flsCtx && this.floatingOverlayEl && this.floatingOverlayEl.classList.contains('active')) {
+          this.renderMesh(this.flsCtx, this.flsCanvas.width, this.flsCanvas.height, this.fsCurrentColors, energy, 0.96);
         }
       }
     };
@@ -494,46 +528,53 @@ export class LivingMeshController {
     const c3 = palette[3];
     const t = this.phase;
 
-    // 1. Deep obsidian studio base (#07090e) subtly tinted by shadow layer c0
-    const baseR = Math.round(7 + c0[0] * 0.18 * intensity);
-    const baseG = Math.round(9 + c0[1] * 0.18 * intensity);
-    const baseB = Math.round(14 + c0[2] * 0.20 * intensity);
+    // 1. Rich tinted dark-studio foundation anchored by deep tone c0
+    const baseR = Math.round(8 + c0[0] * 0.34 * intensity);
+    const baseG = Math.round(10 + c0[1] * 0.34 * intensity);
+    const baseB = Math.round(15 + c0[2] * 0.36 * intensity);
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = `rgb(${baseR}, ${baseG}, ${baseB})`;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Multi-layered fluid color blobs on non-repeating Lissajous orbits
-    // Controlled alpha prevents additive washout so dark studio contrast stays rich
+    // 2. Five fluid radial color blobs moving on non-repeating Lissajous paths
+    // Soft multi-stop radial gradients produce ultra-smooth Apple Music mesh blending natively
     const maxDim = Math.max(w, h);
     const blobs = [
       {
         color: c1,
-        x: 0.62 + Math.sin(t * 0.37) * 0.26 + Math.cos(t * 0.19) * 0.08,
-        y: 0.28 + Math.cos(t * 0.29) * 0.22 + Math.sin(t * 0.17) * 0.07,
-        r: (0.62 + energy * 0.22) * maxDim,
-        alpha: (0.52 + energy * 0.22) * intensity
+        x: 0.65 + Math.sin(t * 0.41) * 0.28 + Math.cos(t * 0.21) * 0.08,
+        y: 0.26 + Math.cos(t * 0.33) * 0.24 + Math.sin(t * 0.19) * 0.07,
+        r: (0.68 + energy * 0.26) * maxDim,
+        alpha: (0.72 + energy * 0.22) * intensity
       },
       {
         color: c2,
-        x: 0.22 + Math.cos(t * 0.31 + 1.4) * 0.24,
-        y: 0.72 + Math.sin(t * 0.23 + 0.8) * 0.22,
-        r: (0.58 + energy * 0.18) * maxDim,
-        alpha: (0.46 + energy * 0.16) * intensity
+        x: 0.20 + Math.cos(t * 0.35 + 1.4) * 0.26,
+        y: 0.74 + Math.sin(t * 0.27 + 0.8) * 0.24,
+        r: (0.64 + energy * 0.22) * maxDim,
+        alpha: (0.64 + energy * 0.20) * intensity
       },
       {
         color: c3,
-        x: 0.80 + Math.sin(t * 0.27 + 2.6) * 0.22,
-        y: 0.66 + Math.cos(t * 0.33 + 1.9) * 0.24,
-        r: (0.52 + energy * 0.18) * maxDim,
-        alpha: (0.40 + energy * 0.16) * intensity
+        x: 0.82 + Math.sin(t * 0.29 + 2.6) * 0.24,
+        y: 0.68 + Math.cos(t * 0.37 + 1.9) * 0.26,
+        r: (0.58 + energy * 0.20) * maxDim,
+        alpha: (0.58 + energy * 0.18) * intensity
       },
       {
-        // Harmonic sub-bass core pulse
+        color: c0,
+        x: 0.28 + Math.sin(t * 0.23 + 4.1) * 0.22,
+        y: 0.24 + Math.cos(t * 0.31 + 3.2) * 0.20,
+        r: (0.56 + energy * 0.16) * maxDim,
+        alpha: (0.50 + energy * 0.16) * intensity
+      },
+      {
+        // Sub-bass reactive core bloom (32–120 Hz)
         color: c1,
-        x: 0.50 + Math.cos(t * 0.43) * 0.12,
-        y: 0.42 + Math.sin(t * 0.39) * 0.12,
-        r: (0.34 + energy * 0.30) * maxDim,
-        alpha: (0.16 + energy * 0.34) * intensity
+        x: 0.50 + Math.cos(t * 0.47) * 0.14,
+        y: 0.44 + Math.sin(t * 0.43) * 0.14,
+        r: (0.38 + energy * 0.36) * maxDim,
+        alpha: (0.24 + energy * 0.46) * intensity
       }
     ];
 
@@ -546,10 +587,12 @@ export class LivingMeshController {
       const r = Math.round(b.color[0]);
       const g = Math.round(b.color[1]);
       const bl = Math.round(b.color[2]);
+      const a0 = Math.min(0.92, b.alpha);
 
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-      grad.addColorStop(0, `rgba(${r}, ${g}, ${bl}, ${Math.min(0.88, b.alpha).toFixed(3)})`);
-      grad.addColorStop(0.45, `rgba(${r}, ${g}, ${bl}, ${(b.alpha * 0.40).toFixed(3)})`);
+      grad.addColorStop(0, `rgba(${r}, ${g}, ${bl}, ${a0.toFixed(3)})`);
+      grad.addColorStop(0.42, `rgba(${r}, ${g}, ${bl}, ${(a0 * 0.52).toFixed(3)})`);
+      grad.addColorStop(0.75, `rgba(${r}, ${g}, ${bl}, ${(a0 * 0.18).toFixed(3)})`);
       grad.addColorStop(1, `rgba(${r}, ${g}, ${bl}, 0)`);
 
       ctx.fillStyle = grad;

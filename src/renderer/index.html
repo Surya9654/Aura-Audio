@@ -359,9 +359,9 @@
               </div>
               <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
                 <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Backdrop</span>
-                <div class="stereo-mode-selector" id="backdrop-mode-selector" title="Master Theme keeps the Living Mesh strictly in your selected Master Edition hue; Cover Art uses dark-calibrated album colors in Fullscreen &amp; Remote">
-                  <button type="button" class="btn-segment active" data-backdrop-mode="harmonized">Master Theme</button>
-                  <button type="button" class="btn-segment" data-backdrop-mode="artwork">Cover Art</button>
+                <div class="stereo-mode-selector" id="backdrop-mode-selector" title="Cover Art dynamically extracts 4 dominant cover colors for Fullscreen &amp; Remote; Master Theme locks all backdrops to your selected Master Edition hue">
+                  <button type="button" class="btn-segment active" data-backdrop-mode="artwork">Cover Art</button>
+                  <button type="button" class="btn-segment" data-backdrop-mode="harmonized">Master Theme</button>
                 </div>
               </div>
             </div>
@@ -521,11 +521,11 @@
           <div class="setting-row">
             <div>
               <div class="setting-title">Headroom Preamp</div>
-              <div class="setting-desc">Set automatically when you pick a preset so boosted bands never clip. You can fine-tune it here.</div>
+              <div class="setting-desc">Set automatically when you pick a preset so boosted bands never clip, or boost up to +10.0 dB for high-headroom recordings (-12.0 dB to +10.0 dB).</div>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-gold);" id="preamp-val">0.0 dB</span>
-              <input type="range" id="preamp-slider" min="-12" max="6" step="0.5" value="0" style="width: 140px; cursor: pointer;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-gold); min-width: 64px; text-align: right;" id="preamp-val">0.0 dB</span>
+              <input type="range" id="preamp-slider" min="-12" max="10" step="0.5" value="0" style="width: 150px; cursor: pointer;">
             </div>
           </div>
 

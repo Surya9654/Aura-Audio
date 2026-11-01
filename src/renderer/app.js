@@ -630,7 +630,7 @@ function updateSignalPath() {
 }
 
 // 4. Playback Logic
-async function playTrackIndex(index) {
+async function playTrackIndex(index, transitionDir = null) {
   if (index < 0 || index >= state.filteredTracks.length) return;
 
   // Immediately halt any previous audio playback to guarantee no overlapping streams
@@ -654,11 +654,20 @@ async function playTrackIndex(index) {
     bannerDacTag.textContent = 'DAC VERIFIED';
   }
 
-  // Update Now Playing UI
-  playerTitle.textContent = track.title;
-  playerArtist.textContent = track.artist;
-  playerTelemetry.textContent = `${track.format} • ${track.bitsPerSample || 24}-BIT • ${(track.sampleRate / 1000).toFixed(1)} kHz • ${track.bitrate ? track.bitrate + ' kbps' : 'Lossless'}`;
-  playerTelemetry.classList.toggle('flac-neon', track.format === 'FLAC');
+  // Update Now Playing UI with smooth optical blur swap
+  const playerMetaBox = playerTitle ? playerTitle.parentElement : null;
+  if (playerMetaBox) {
+    playerMetaBox.classList.remove('blur-swap');
+    void playerMetaBox.offsetWidth;
+    playerMetaBox.classList.add('blur-swap');
+  }
+  setTimeout(() => {
+    if (state.currentTrack !== track) return;
+    playerTitle.textContent = track.title;
+    playerArtist.textContent = track.artist;
+    playerTelemetry.textContent = `${track.format} • ${track.bitsPerSample || 24}-BIT • ${(track.sampleRate / 1000).toFixed(1)} kHz • ${track.bitrate ? track.bitrate + ' kbps' : 'Lossless'}`;
+    playerTelemetry.classList.toggle('flac-neon', track.format === 'FLAC');
+  }, playerMetaBox ? 120 : 0);
 
   const ambientGlow = document.getElementById('ambient-glow');
   const coverUrl = getTrackCover(track);
@@ -666,7 +675,7 @@ async function playTrackIndex(index) {
   playerArtBox.innerHTML = `<img src="${coverUrl}" alt="" style="width:100%;height:100%;border-radius:10px;object-fit:cover;" onerror="this.src='${DEFAULT_APP_COVER}'" />`;
   livingMesh.setArtwork(coverUrl, hasRealCover);
   if (ambientGlow) {
-    ambientGlow.style.opacity = '0.34';
+    ambientGlow.style.opacity = '0.68';
   }
 
   // Update the highlighted row in place (no full re-render, no flicker)
@@ -677,7 +686,7 @@ async function playTrackIndex(index) {
   });
   updateSignalPath();
   const isFsOpen = fsPlayer && fsPlayer.classList.contains('open');
-  refreshFullscreen(isFsOpen);
+  refreshFullscreen(isFsOpen ? (transitionDir || 'next') : null);
   updateLockscreenWidgets(track);
 
   // Load and play
@@ -776,9 +785,9 @@ btnMasterPlay.addEventListener('click', () => {
 
 btnNext.addEventListener('click', () => {
   if (state.currentTrackIndex + 1 < state.filteredTracks.length) {
-    playTrackIndex(state.currentTrackIndex + 1);
+    playTrackIndex(state.currentTrackIndex + 1, 'next');
   } else {
-    playTrackIndex(0);
+    playTrackIndex(0, 'next');
   }
 });
 
@@ -805,15 +814,15 @@ btnPrev.addEventListener('click', () => {
     return;
   }
   if (state.currentTrackIndex > 0) {
-    playTrackIndex(state.currentTrackIndex - 1);
+    playTrackIndex(state.currentTrackIndex - 1, 'prev');
   } else {
-    playTrackIndex(state.filteredTracks.length - 1);
+    playTrackIndex(state.filteredTracks.length - 1, 'prev');
   }
 });
 
 audioEngine.onTrackEnded = () => {
   if (state.currentTrackIndex + 1 < state.filteredTracks.length) {
-    playTrackIndex(state.currentTrackIndex + 1);
+    playTrackIndex(state.currentTrackIndex + 1, 'next');
   } else {
     updatePlayPauseState(false);
   }
@@ -1539,8 +1548,33 @@ audioEngine.onError = (err) => {
 // 9. Fullscreen Now Playing (glass controls + matte details tile)
 function currentTrack() { return state.filteredTracks[state.currentTrackIndex]; }
 
-function refreshFullscreen(animateGrid = false) {
-  const track = currentTrack();
+let fsTransitionTimer = null;
+let fsTransitionToken = 0;
+
+function preDecodeCover(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    let settled = false;
+    const finish = (finalUrl) => {
+      if (!settled) {
+        settled = true;
+        resolve(finalUrl);
+      }
+    };
+    img.onload = () => {
+      if (typeof img.decode === 'function') {
+        img.decode().then(() => finish(url)).catch(() => finish(url));
+      } else {
+        finish(url);
+      }
+    };
+    img.onerror = () => finish(DEFAULT_APP_COVER);
+    img.src = url || DEFAULT_APP_COVER;
+    setTimeout(() => finish(url || DEFAULT_APP_COVER), 180);
+  });
+}
+
+function applyFullscreenTrackDom(track, decodedCoverUrl = null) {
   if (!track) return;
   document.getElementById('fs-title').textContent = track.title;
   document.getElementById('fs-artist').textContent = track.artist;
@@ -1549,23 +1583,83 @@ function refreshFullscreen(animateGrid = false) {
   tag.classList.toggle('flac-neon', track.format === 'FLAC');
 
   const art = document.getElementById('fs-art');
-  const meta = document.getElementById('fs-meta');
-  const backdrop = document.getElementById('fs-backdrop');
+  const coverUrl = decodedCoverUrl || getTrackCover(track);
+  const hasRealCover = Boolean(track && track.hasCover && track.coverData);
 
-  if (animateGrid) {
-    art.classList.remove('transition-grid');
-    meta.classList.remove('transition-grid');
-    // Trigger reflow to restart CSS animation
-    void art.offsetWidth;
-    art.classList.add('transition-grid');
-    meta.classList.add('transition-grid');
+  // Reuse persistent <img> element inside #fs-art so swapping at peak blur never flashes blank
+  let imgEl = art.querySelector('img');
+  if (!imgEl) {
+    imgEl = document.createElement('img');
+    imgEl.alt = '';
+    imgEl.onerror = () => { imgEl.src = DEFAULT_APP_COVER; };
+    art.innerHTML = '';
+    art.appendChild(imgEl);
+  }
+  if (imgEl.src !== coverUrl) {
+    imgEl.src = coverUrl;
   }
 
+  livingMesh.setArtwork(getTrackCover(track), hasRealCover);
+  if (fsDetails.classList.contains('open')) renderSongDetails();
+}
+
+function clearFullscreenTransitionClasses(art, meta) {
+  art.classList.remove('fs-blur-out', 'fs-blur-in');
+  meta.classList.remove('fs-blur-out', 'fs-blur-in');
+}
+
+function refreshFullscreen(transitionMode = null) {
+  const track = currentTrack();
+  if (!track) return;
+
+  const art = document.getElementById('fs-art');
+  const meta = document.getElementById('fs-meta');
+  const token = ++fsTransitionToken;
+
+  if (fsTransitionTimer) {
+    clearTimeout(fsTransitionTimer);
+    fsTransitionTimer = null;
+  }
+
+  // Start Living Mesh palette morph immediately so ambient color clouds glide continuously
   const coverUrl = getTrackCover(track);
   const hasRealCover = Boolean(track && track.hasCover && track.coverData);
-  art.innerHTML = `<img src="${coverUrl}" alt="" onerror="this.src='${DEFAULT_APP_COVER}'" />`;
   livingMesh.setArtwork(coverUrl, hasRealCover);
-  if (fsDetails.classList.contains('open')) renderSongDetails();
+
+  if (transitionMode) {
+    const alreadyBlurringOut = art.classList.contains('fs-blur-out');
+
+    // Start pre-decoding the target cover in GPU memory while the outgoing cover blurs out
+    const decodePromise = preDecodeCover(coverUrl);
+
+    if (!alreadyBlurringOut) {
+      clearFullscreenTransitionClasses(art, meta);
+      void art.offsetWidth;
+      art.classList.add('fs-blur-out');
+      meta.classList.add('fs-blur-out');
+    }
+
+    const blurOutDelay = alreadyBlurringOut ? 50 : 185;
+    fsTransitionTimer = setTimeout(async () => {
+      fsTransitionTimer = null;
+      const readyUrl = await decodePromise;
+      if (token !== fsTransitionToken) return;
+
+      const latest = currentTrack();
+      if (!latest) return;
+
+      // Swap cover & metadata seamlessly at peak optical blur (26px bokeh), then focus cleanly in
+      applyFullscreenTrackDom(latest, latest === track ? readyUrl : getTrackCover(latest));
+      clearFullscreenTransitionClasses(art, meta);
+      void art.offsetWidth;
+      art.classList.add('fs-blur-in');
+      meta.classList.add('fs-blur-in');
+    }, blurOutDelay);
+    return;
+  }
+
+  clearFullscreenTransitionClasses(art, meta);
+  applyFullscreenTrackDom(track);
 }
 
 function renderSongDetails() {
@@ -1589,7 +1683,8 @@ function renderSongDetails() {
 
 function openNowPlaying() {
   if (!currentTrack()) return;
-  refreshFullscreen(false);
+  refreshFullscreen(null);
+  livingMesh.renderImmediateFrame();
   fsPlayer.classList.add('open');
   fsPlayer.setAttribute('aria-hidden', 'false');
   // Attempt HTML5 Fullscreen API gracefully without breaking UI display
