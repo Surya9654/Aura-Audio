@@ -129,6 +129,21 @@
   const miniBtnPlay = document.getElementById('mini-btn-play');
   const miniPlayIcon = document.getElementById('mini-play-icon');
 
+  // DOM Elements - Audio Destination & Mobile Playback Stream
+  const btnDestToggle = document.getElementById('btn-dest-toggle');
+  const destIcon = document.getElementById('dest-icon');
+  const destLabel = document.getElementById('dest-label');
+  const destSegmentedControl = document.getElementById('dest-segmented-control');
+  const remoteLocalAudio = document.getElementById('remote-local-audio');
+
+  let playbackDestination = 'desktop'; // 'desktop' | 'phone' | 'both'
+  try {
+    const savedDest = localStorage.getItem('aura.playbackDestination');
+    if (savedDest && ['desktop', 'phone', 'both'].includes(savedDest)) {
+      playbackDestination = savedDest;
+    }
+  } catch (e) { }
+
   function haptic(ms = 12) {
     if (navigator.vibrate) {
       try { navigator.vibrate(ms); } catch (e) { }
@@ -519,6 +534,7 @@
         if (miniArtImg) miniArtImg.src = resolved;
       }
       fetchLibrary();
+      sendCommand('set-playback-destination', { destination: playbackDestination });
     };
 
     ws.onmessage = (event) => {
@@ -582,6 +598,124 @@
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ command: cmd, action: cmd, ...data }));
     }
+  }
+
+  // -------------------------------------------------------------
+  // Mobile Direct Playback Audio Engine (Phone / Both / PC)
+  // -------------------------------------------------------------
+  function updatePlaybackDestinationUI() {
+    if (destIcon && destLabel) {
+      if (playbackDestination === 'phone') {
+        destIcon.textContent = '📱';
+        destLabel.textContent = 'This Phone';
+        if (btnDestToggle) btnDestToggle.classList.add('active');
+      } else if (playbackDestination === 'both') {
+        destIcon.textContent = '✨';
+        destLabel.textContent = 'PC + Phone';
+        if (btnDestToggle) btnDestToggle.classList.add('active');
+      } else {
+        destIcon.textContent = '💻';
+        destLabel.textContent = 'Desktop PC';
+        if (btnDestToggle) btnDestToggle.classList.remove('active');
+      }
+    }
+
+    if (destSegmentedControl) {
+      const btns = destSegmentedControl.querySelectorAll('.dest-seg-btn');
+      btns.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-dest') === playbackDestination);
+      });
+    }
+  }
+
+  function syncLocalAudioPlayback(targetPlaying) {
+    if (!remoteLocalAudio) return;
+
+    if (playbackDestination === 'desktop') {
+      if (!remoteLocalAudio.paused) {
+        remoteLocalAudio.pause();
+      }
+      return;
+    }
+
+    // Playback destination is 'phone' or 'both'
+    if (state.trackPath) {
+      const streamUrl = resolveApiUrl('/api/audio-stream?path=' + encodeURIComponent(state.trackPath));
+      if (remoteLocalAudio.dataset.currentPath !== state.trackPath || !remoteLocalAudio.src) {
+        remoteLocalAudio.dataset.currentPath = state.trackPath;
+        remoteLocalAudio.src = streamUrl;
+        remoteLocalAudio.load();
+        if (state.currentTime > 0) {
+          remoteLocalAudio.currentTime = state.currentTime;
+        }
+      }
+    }
+
+    if (state.volume !== undefined) {
+      try {
+        remoteLocalAudio.volume = Math.max(0, Math.min(1, state.volume));
+      } catch (e) { }
+    }
+
+    if (targetPlaying) {
+      if (remoteLocalAudio.paused) {
+        if (state.currentTime > 0 && Math.abs(remoteLocalAudio.currentTime - state.currentTime) > 1.2) {
+          remoteLocalAudio.currentTime = state.currentTime;
+        }
+        const p = remoteLocalAudio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(err => {
+            console.warn('Mobile audio playback needs user tap:', err);
+          });
+        }
+      } else {
+        // Already playing, check sync drift
+        const targetTime = state.currentTime || 0;
+        const drift = Math.abs(remoteLocalAudio.currentTime - targetTime);
+        if (drift > 1.8) {
+          remoteLocalAudio.currentTime = targetTime;
+        }
+      }
+    } else {
+      if (!remoteLocalAudio.paused) {
+        remoteLocalAudio.pause();
+      }
+    }
+  }
+
+  function setPlaybackDestination(dest, notifyDesktop = true) {
+    if (!['desktop', 'phone', 'both'].includes(dest)) return;
+    playbackDestination = dest;
+    try {
+      localStorage.setItem('aura.playbackDestination', dest);
+    } catch (e) { }
+
+    updatePlaybackDestinationUI();
+
+    if (dest === 'phone') {
+      showToast('📱 Output: Streaming Lossless to This Phone');
+    } else if (dest === 'both') {
+      showToast('✨ Output: Synchronized PC + Phone');
+    } else {
+      showToast('💻 Output: Desktop PC Speakers / DAC');
+    }
+
+    syncLocalAudioPlayback(state.isPlaying);
+
+    if (notifyDesktop) {
+      sendCommand('set-playback-destination', { destination: dest });
+    }
+  }
+
+  if (remoteLocalAudio) {
+    remoteLocalAudio.addEventListener('ended', () => {
+      if (playbackDestination === 'phone') {
+        sendCommand('next');
+      }
+    });
+    remoteLocalAudio.addEventListener('error', (e) => {
+      console.warn('Remote local audio stream error:', e);
+    });
   }
 
   // REST Fallback for Library Fetching
@@ -716,6 +850,19 @@
         state.trackPath = t.path;
         state.isPlaying = true;
         updatePlayPauseIcons();
+
+        // Direct mobile playback if phone/both is selected (initiated within user click gesture)
+        if (playbackDestination !== 'desktop' && remoteLocalAudio) {
+          const streamUrl = resolveApiUrl('/api/audio-stream?path=' + encodeURIComponent(t.path));
+          remoteLocalAudio.dataset.currentPath = t.path;
+          remoteLocalAudio.src = streamUrl;
+          remoteLocalAudio.currentTime = 0;
+          const p = remoteLocalAudio.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch(err => console.warn('Mobile play err:', err));
+          }
+        }
+
         applyState(state);
         // Switch to Now Playing tab
         switchTab('player');
@@ -762,6 +909,9 @@
       haptic(18);
       state.isPlaying = !state.isPlaying;
       updatePlayPauseIcons();
+      if (playbackDestination !== 'desktop') {
+        syncLocalAudioPlayback(state.isPlaying);
+      }
       sendCommand('toggle-play');
     });
   }
@@ -813,6 +963,12 @@
     if (data.currentTime !== undefined && !isUserScrubbing) {
       state.currentTime = data.currentTime;
       lastStateReceivedTime = Date.now();
+      if (playbackDestination !== 'desktop' && remoteLocalAudio && !remoteLocalAudio.paused) {
+        const drift = Math.abs(remoteLocalAudio.currentTime - data.currentTime);
+        if (drift > 1.8) {
+          remoteLocalAudio.currentTime = data.currentTime;
+        }
+      }
     }
     if (data.duration !== undefined && data.duration > 0) {
       state.duration = data.duration;
@@ -820,12 +976,16 @@
     if (data.isPlaying !== undefined && state.isPlaying !== data.isPlaying) {
       state.isPlaying = data.isPlaying;
       updatePlayPauseIcons();
+      syncLocalAudioPlayback(state.isPlaying);
     }
     if (data.volume !== undefined && !isUserDraggingVolume && document.activeElement !== volumeSlider) {
       state.volume = data.volume;
       const v = Math.round(data.volume * 100);
       volumeSlider.value = v;
       volumeVal.textContent = `${v}%`;
+      if (playbackDestination !== 'desktop' && remoteLocalAudio) {
+        try { remoteLocalAudio.volume = state.volume; } catch (e) { }
+      }
     }
     if (data.subBass !== undefined) {
       meshTargetSubBass = state.isPlaying ? Math.max(0, Math.min(1, data.subBass)) : 0;
@@ -971,6 +1131,8 @@
     }
 
     updateProgressUI();
+    syncLocalAudioPlayback(state.isPlaying);
+    updatePlaybackDestinationUI();
 
     // Re-render library highlight for currently playing track
     if (currentActiveTab === 'library') {
@@ -1298,6 +1460,9 @@
     haptic(18);
     state.isPlaying = !state.isPlaying;
     updatePlayPauseIcons();
+    if (playbackDestination !== 'desktop') {
+      syncLocalAudioPlayback(state.isPlaying);
+    }
     sendCommand('toggle-play');
   });
 
@@ -1331,6 +1496,9 @@
     state.currentTime = seekTime;
     lastStateReceivedTime = Date.now();
     updateProgressUI();
+    if (playbackDestination !== 'desktop' && remoteLocalAudio) {
+      remoteLocalAudio.currentTime = seekTime;
+    }
     haptic(15);
     sendCommand('seek', { time: seekTime });
   };
@@ -1592,9 +1760,33 @@
     });
   }
 
+  // 8. Playback Audio Destination Controls (Phone / PC / Both)
+  if (btnDestToggle) {
+    btnDestToggle.addEventListener('click', () => {
+      haptic(14);
+      let nextDest = 'desktop';
+      if (playbackDestination === 'desktop') nextDest = 'phone';
+      else if (playbackDestination === 'phone') nextDest = 'both';
+      else nextDest = 'desktop';
+      setPlaybackDestination(nextDest, true);
+    });
+  }
+
+  if (destSegmentedControl) {
+    const btns = destSegmentedControl.querySelectorAll('.dest-seg-btn');
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        haptic(14);
+        const dest = btn.getAttribute('data-dest');
+        if (dest) setPlaybackDestination(dest, true);
+      });
+    });
+  }
+
   // Initialize
   applyRemoteTheme(state.activeThemeId, false);
   updateStereoUI();
+  updatePlaybackDestinationUI();
   connect();
   startProgressLoop();
 })();

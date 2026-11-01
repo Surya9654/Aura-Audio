@@ -264,6 +264,69 @@ body {
   transform: scale(0.94);
 }
 
+/* Audio Destination Quick Toggle Button */
+.dest-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s var(--ease-spring);
+}
+
+.dest-toggle-btn:active {
+  transform: scale(0.94);
+}
+
+.dest-toggle-btn.phone-active {
+  background: var(--accent-alpha20);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-light);
+  box-shadow: 0 0 12px var(--accent-gold-glow);
+}
+
+/* Destination Segmented Control in Sheet */
+.dest-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+}
+
+.dest-seg-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 7px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.dest-seg-btn.active {
+  background: var(--accent-gradient);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px var(--accent-gold-glow);
+  font-weight: 700;
+}
+
 .theme-indicator-swatch {
   width: 8px;
   height: 8px;

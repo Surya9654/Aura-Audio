@@ -2958,6 +2958,31 @@ function initConnectUI() {
         if (action.deviceId !== undefined) {
           selectPlaybackDevice(action.deviceId, action.name);
         }
+      } else if (cmd === 'set-playback-destination') {
+        const dest = action.destination || 'desktop';
+        state.playbackDestination = dest;
+        if (dest === 'phone') {
+          // Attenuate / mute desktop output so music streams strictly through phone
+          if (state.savedDesktopVolume === undefined && audioEngine.volume > 0) {
+            state.savedDesktopVolume = audioEngine.volume;
+          }
+          audioEngine.setVolume(0);
+          volumeSlider.value = 0;
+          setVolumeFill();
+        } else {
+          // Restore desktop sound for 'desktop' or 'both'
+          if (state.savedDesktopVolume !== undefined) {
+            audioEngine.setVolume(state.savedDesktopVolume);
+            volumeSlider.value = state.savedDesktopVolume;
+            setVolumeFill();
+            delete state.savedDesktopVolume;
+          } else if (audioEngine.volume === 0) {
+            audioEngine.setVolume(0.85);
+            volumeSlider.value = 0.85;
+            setVolumeFill();
+          }
+        }
+        broadcastRemoteState(true);
       }
     });
   }

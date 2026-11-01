@@ -42,6 +42,12 @@
           <span id="remote-theme-label">Master Gold</span>
         </button>
 
+        <!-- Audio Playback Destination Quick Toggle (Phone vs PC) -->
+        <button class="dest-toggle-btn" id="btn-dest-toggle" title="Switch audio playback between Phone and Desktop PC">
+          <span class="dest-icon" id="dest-icon">💻</span>
+          <span class="dest-label" id="dest-label">PC Audio</span>
+        </button>
+
         <div class="header-badges" id="player-badges">
           <span class="badge badge-gold" id="badge-format">FLAC 24-BIT</span>
           <span class="badge" id="badge-dr">
@@ -235,13 +241,22 @@
           </div>
         </div>
 
-        <!-- Playback Output Device Selector -->
-        <div class="sheet-card">
+        <!-- Playback Output Device & Destination Selector -->
+        <div class="sheet-card destination-card">
           <div class="sheet-row">
-            <span class="sheet-label">Playback Device</span>
+            <div>
+              <span class="sheet-label">Playback Audio Destination</span>
+              <div class="sheet-sublabel" id="remote-output-sublabel">Stream audio directly to this phone or to PC speakers/DAC</div>
+            </div>
             <select class="sheet-select" id="remote-output-selector">
-              <option value="default">System Default Audio</option>
+              <option value="phone">📱 This Phone / Mobile Device</option>
+              <option value="default" selected>💻 Desktop: System Default Audio</option>
             </select>
+          </div>
+          <div class="dest-segmented-control" id="dest-segmented-control" style="margin-top: 10px;">
+            <button class="dest-seg-btn active" data-dest="desktop">💻 Desktop PC</button>
+            <button class="dest-seg-btn" data-dest="phone">📱 This Phone</button>
+            <button class="dest-seg-btn" data-dest="both">✨ Both (Sync)</button>
           </div>
         </div>
 
@@ -326,6 +341,9 @@
       </button>
     </div>
   </aside>
+
+  <!-- Native HTML5 Lossless Audio Stream for Mobile Phone Playback -->
+  <audio id="remote-local-audio" preload="metadata" playsinline></audio>
 
   <script src="/remote.js"></script>
 </body>

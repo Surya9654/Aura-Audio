@@ -333,6 +333,80 @@ class AuraRemoteServer {
         return;
       }
 
+      // 1b-2. API: Audio Stream for Remote Device Playback
+      if (pathname === '/api/audio-stream') {
+        const filePath = parsedUrl.searchParams.get('file') || parsedUrl.searchParams.get('path') || (this.currentState ? (this.currentState.trackPath || this.currentState.path) : null);
+        const indexStr = parsedUrl.searchParams.get('index');
+
+        let targetPath = filePath;
+        if (!targetPath && indexStr !== null) {
+          const idx = parseInt(indexStr, 10);
+          if (!isNaN(idx) && this.currentLibrary[idx]) {
+            targetPath = this.currentLibrary[idx].path;
+          }
+        }
+
+        if (!targetPath || !fs.existsSync(targetPath)) {
+          res.writeHead(404, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+          res.end('Audio file not found');
+          return;
+        }
+
+        try {
+          const ext = path.extname(targetPath).toLowerCase();
+          const mimeTypes = {
+            '.flac': 'audio/flac',
+            '.wav': 'audio/wav',
+            '.aiff': 'audio/aiff',
+            '.mp3': 'audio/mpeg',
+            '.m4a': 'audio/mp4',
+            '.alac': 'audio/mp4',
+            '.aac': 'audio/aac',
+            '.ogg': 'audio/ogg',
+            '.opus': 'audio/ogg'
+          };
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          const stat = fs.statSync(targetPath);
+          const totalSize = stat.size;
+          const range = req.headers.range;
+
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Accept-Ranges', 'bytes');
+          res.setHeader('Cache-Control', 'no-cache');
+
+          if (range) {
+            const parts = range.replace(/bytes=/, '').split('-');
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+            const chunkSize = (end - start) + 1;
+
+            res.writeHead(206, {
+              'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+              'Content-Length': chunkSize,
+              'Content-Type': contentType
+            });
+
+            const stream = fs.createReadStream(targetPath, { start, end, highWaterMark: 256 * 1024 });
+            stream.pipe(res);
+          } else {
+            res.writeHead(200, {
+              'Content-Length': totalSize,
+              'Content-Type': contentType
+            });
+
+            const stream = fs.createReadStream(targetPath, { highWaterMark: 256 * 1024 });
+            stream.pipe(res);
+          }
+        } catch (err) {
+          console.error('[Aura Remote]: Audio stream error:', err);
+          try {
+            res.writeHead(500, { 'Access-Control-Allow-Origin': '*' });
+            res.end('Stream error');
+          } catch (e) {}
+        }
+        return;
+      }
+
       // 1c. API: Track Artwork On-Demand
       if (pathname === '/api/track-art') {
         const filePath = parsedUrl.searchParams.get('path');
