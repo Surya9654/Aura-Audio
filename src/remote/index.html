@@ -35,9 +35,19 @@
           <span class="status-indicator live" id="status-dot"></span>
           <span class="status-text" id="status-text">WI-FI LINK ACTIVE</span>
         </div>
+
+        <!-- Master Edition Theme Swatch Pill (Click to cycle themes) -->
+        <button class="titlebar-theme-pill" id="remote-theme-pill" title="Master Edition Theme: Tap to switch accent">
+          <span class="theme-indicator-swatch" id="remote-theme-dot"></span>
+          <span id="remote-theme-label">Master Gold</span>
+        </button>
+
         <div class="header-badges" id="player-badges">
           <span class="badge badge-gold" id="badge-format">FLAC 24-BIT</span>
-          <span class="badge" id="badge-dr">DR 14 dB</span>
+          <span class="badge" id="badge-dr">
+            <span class="dr-meter-dot" id="remote-dr-dot"></span>
+            <span id="remote-dr-text">DR 14 dB</span>
+          </span>
         </div>
       </div>
 
@@ -168,8 +178,41 @@
               <span class="stereo-slider-label">L/R Balance</span>
               <input type="range" class="stereo-mini-slider" id="remote-stereo-balance" min="-100" max="100" step="5" value="0">
               <span class="stereo-slider-val" id="remote-stereo-balance-val">Center</span>
-              <button type="button" class="stereo-swap-btn" id="remote-channel-swap" title="Swap Left and Right channels">Swap L↔R</button>
             </div>
+            <div class="stereo-btn-row">
+              <button type="button" class="stereo-swap-btn" id="remote-channel-swap" title="Swap Left and Right channels">Swap L↔R</button>
+              <button type="button" class="stereo-swap-btn" id="remote-phase-invert" title="Invert Left channel phase (180°)">Phase 180°</button>
+              <button type="button" class="stereo-swap-btn" id="remote-pure-mode" title="Pure Mode (DSP &amp; EQ Bypass)">Pure Mode: OFF</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Master Edition Personalisation Swatches -->
+        <div class="sheet-card theme-personalisation-card">
+          <div class="sheet-row">
+            <div>
+              <span class="sheet-label">Master Edition Theme</span>
+              <div class="sheet-sublabel" id="remote-theme-desc">Signature warm audiophile brass &amp; 24K gold reference</div>
+            </div>
+            <span class="spec-chip gold" id="remote-active-theme-chip">Master Gold</span>
+          </div>
+          <div class="remote-theme-swatches" id="remote-theme-grid">
+            <button type="button" class="remote-swatch-btn active" data-theme="gold" title="Master Gold">
+              <span class="swatch-circle" style="background: #e5b95f;"></span>
+              <span class="swatch-label">Gold</span>
+            </button>
+            <button type="button" class="remote-swatch-btn" data-theme="blood-red" title="Blood Red">
+              <span class="swatch-circle" style="background: #e62b42;"></span>
+              <span class="swatch-label">Blood Red</span>
+            </button>
+            <button type="button" class="remote-swatch-btn" data-theme="spotify-green" title="Spotify Green">
+              <span class="swatch-circle" style="background: #1db954;"></span>
+              <span class="swatch-label">Green</span>
+            </button>
+            <button type="button" class="remote-swatch-btn" data-theme="platinum" title="Liquid Platinum">
+              <span class="swatch-circle" style="background: #e2e8f0;"></span>
+              <span class="swatch-label">Platinum</span>
+            </button>
           </div>
         </div>
 
@@ -189,6 +232,32 @@
               <option value="hifiman_sundara">HIFIMAN Sundara / Ananda</option>
               <option value="warm_analog_tube">Warm Tube &amp; Vinyl</option>
             </select>
+          </div>
+        </div>
+
+        <!-- 32-Bit Signal Path Telemetry -->
+        <div class="sheet-card telemetry-card">
+          <div class="sheet-row" style="margin-bottom: 8px;">
+            <span class="sheet-label">Signal Path Telemetry</span>
+            <span class="spec-chip" id="remote-pipeline-tag" style="font-size: 10px;">32-BIT FLOAT</span>
+          </div>
+          <div class="telemetry-grid">
+            <div class="telemetry-pill">
+              <span class="telemetry-dot active"></span>
+              <span>Bit-Perfect Pipeline</span>
+            </div>
+            <div class="telemetry-pill" id="tel-dc-filter">
+              <span class="telemetry-dot active"></span>
+              <span>20Hz DC Filter</span>
+            </div>
+            <div class="telemetry-pill" id="tel-noise-gate">
+              <span class="telemetry-dot active"></span>
+              <span>Noise Gate (-65dB)</span>
+            </div>
+            <div class="telemetry-pill" id="tel-pure-mode">
+              <span class="telemetry-dot" id="tel-pure-dot"></span>
+              <span id="tel-pure-text">Pure Mode: OFF</span>
+            </div>
           </div>
         </div>
       </section>

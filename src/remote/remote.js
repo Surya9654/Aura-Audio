@@ -33,6 +33,11 @@
     stereoWidth: 1.0,
     stereoBalance: 0,
     channelSwap: false,
+    phaseInvert: false,
+    activeThemeId: 'gold',
+    isBitPerfect: false,
+    subsonicFilterEnabled: true,
+    noiseGateEnabled: true,
     trackPath: ''
   };
 
@@ -44,6 +49,9 @@
   const toastText = document.getElementById('toast-text');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
+  const remoteThemePill = document.getElementById('remote-theme-pill');
+  const remoteThemeDot = document.getElementById('remote-theme-dot');
+  const remoteThemeLabel = document.getElementById('remote-theme-label');
   const tabNowPlaying = document.getElementById('tab-now-playing');
   const tabLibrary = document.getElementById('tab-library');
   const viewPlayer = document.getElementById('view-player');
@@ -54,6 +62,8 @@
   // DOM Elements - Now Playing
   const badgeFormat = document.getElementById('badge-format');
   const badgeDr = document.getElementById('badge-dr');
+  const remoteDrDot = document.getElementById('remote-dr-dot');
+  const remoteDrText = document.getElementById('remote-dr-text');
   const albumCover = document.getElementById('album-cover');
   const artworkCard = document.getElementById('artwork-card');
   const remoteMeshCanvas = document.getElementById('remote-mesh-canvas');
@@ -86,7 +96,19 @@
   const remoteStereoBalance = document.getElementById('remote-stereo-balance');
   const remoteStereoBalanceVal = document.getElementById('remote-stereo-balance-val');
   const remoteChannelSwap = document.getElementById('remote-channel-swap');
+  const remotePhaseInvert = document.getElementById('remote-phase-invert');
+  const remotePureMode = document.getElementById('remote-pure-mode');
   const presetSelector = document.getElementById('preset-selector');
+
+  const remoteThemeDesc = document.getElementById('remote-theme-desc');
+  const remoteActiveThemeChip = document.getElementById('remote-active-theme-chip');
+  const remoteThemeGrid = document.getElementById('remote-theme-grid');
+  const telDcFilter = document.getElementById('tel-dc-filter');
+  const telNoiseGate = document.getElementById('tel-noise-gate');
+  const telPureMode = document.getElementById('tel-pure-mode');
+  const telPureDot = document.getElementById('tel-pure-dot');
+  const telPureText = document.getElementById('tel-pure-text');
+  const remotePipelineTag = document.getElementById('remote-pipeline-tag');
 
   // DOM Elements - Library
   const libSearchInput = document.getElementById('lib-search-input');
@@ -132,6 +154,72 @@
     setTimeout(() => {
       if (isConnected) toast.classList.remove('visible');
     }, duration);
+  }
+
+  // Master Edition Personalisation Themes (aligned with Desktop)
+  const MASTER_THEMES = [
+    { id: 'gold', name: 'Master Gold', badge: 'Gold', swatchColor: '#e5b95f', desc: 'Signature warm audiophile brass & 24K gold reference' },
+    { id: 'blood-red', name: 'Blood Red', badge: 'Blood Red', swatchColor: '#e62b42', desc: 'High-octane crimson & deep velvet audiophile red' },
+    { id: 'spotify-green', name: 'Spotify Green', badge: 'Spotify Green', swatchColor: '#1db954', desc: 'Vibrant studio electric emerald & punchy acoustic energy' },
+    { id: 'platinum', name: 'Liquid Platinum', badge: 'Platinum', swatchColor: '#e2e8f0', desc: 'Chiseled aerospace titanium & ultra-pure brushed silver' }
+  ];
+
+  const MASTER_THEME_PALETTES = {
+    'gold': [
+      [36, 28, 18],
+      [214, 164, 72],
+      [124, 78, 38],
+      [46, 74, 118]
+    ],
+    'blood-red': [
+      [40, 10, 15],
+      [230, 43, 66],
+      [140, 20, 35],
+      [70, 15, 25]
+    ],
+    'spotify-green': [
+      [10, 36, 18],
+      [29, 185, 84],
+      [18, 115, 52],
+      [20, 50, 80]
+    ],
+    'platinum': [
+      [24, 28, 36],
+      [226, 232, 240],
+      [148, 163, 184],
+      [51, 65, 85]
+    ]
+  };
+
+  function applyRemoteTheme(themeId, notifyDesktop = true) {
+    const theme = MASTER_THEMES.find(t => t.id === themeId) || MASTER_THEMES[0];
+    state.activeThemeId = theme.id;
+    document.documentElement.setAttribute('data-theme', theme.id);
+
+    if (remoteThemeDot) remoteThemeDot.style.background = theme.swatchColor;
+    if (remoteThemeLabel) remoteThemeLabel.textContent = theme.name;
+    if (remoteActiveThemeChip) {
+      remoteActiveThemeChip.textContent = theme.name;
+      remoteActiveThemeChip.style.borderColor = theme.swatchColor;
+      remoteActiveThemeChip.style.color = theme.swatchColor;
+    }
+    if (remoteThemeDesc) remoteThemeDesc.textContent = theme.desc;
+
+    if (remoteThemeGrid) {
+      const swatches = remoteThemeGrid.querySelectorAll('.remote-swatch-btn');
+      swatches.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-theme') === theme.id);
+      });
+    }
+
+    if (state.backdropMode === 'harmonized' || !state.hasCover) {
+      const pal = MASTER_THEME_PALETTES[theme.id] || MASTER_THEME_PALETTES.gold;
+      setRemoteMeshPalette(pal);
+    }
+
+    if (notifyDesktop) {
+      sendCommand('set-theme', { themeId: theme.id });
+    }
   }
 
   function updatePlayPauseIcons() {
@@ -562,6 +650,14 @@
 
     remoteLibraryList.innerHTML = '';
 
+    function highlightMatch(text, query) {
+      if (!text) return '';
+      const escaped = escapeHtml(text);
+      if (!query || !query.trim()) return escaped;
+      const qEsc = escapeHtml(query.trim()).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return escaped.replace(new RegExp(`(${qEsc})`, 'gi'), '<mark class="search-highlight">$1</mark>');
+    }
+
     filtered.forEach((t) => {
       const isCurrentPlaying = (state.trackPath && t.path && state.trackPath.toLowerCase() === t.path.toLowerCase()) ||
         (state.title && t.title && state.title.toLowerCase() === t.title.toLowerCase() && state.artist && t.artist && state.artist.toLowerCase() === t.artist.toLowerCase());
@@ -582,8 +678,8 @@
           <img class="remote-track-thumb" src="${artUrl}" loading="lazy" alt="" onerror="this.onerror=null;this.src='${fallbackArtUrl}';">
         </div>
         <div class="remote-track-meta">
-          <div class="remote-track-title">${escapeHtml(t.title)}</div>
-          <div class="remote-track-sub">${escapeHtml(t.artist)}${t.album ? ' \u2022 ' + escapeHtml(t.album) : ''}</div>
+          <div class="remote-track-title">${highlightMatch(t.title, searchQuery)}</div>
+          <div class="remote-track-sub">${highlightMatch(t.artist, searchQuery)}${t.album ? ' \u2022 ' + highlightMatch(t.album, searchQuery) : ''}</div>
           <div class="remote-track-badges">
             <span class="tag-mini ${isFlac ? 'flac' : ''}">${t.format || 'FLAC'}</span>
             <span class="tag-mini ${isHires ? 'hires' : ''}">${bits} \u2022 ${rateKhz}</span>
@@ -783,15 +879,50 @@
     badgeFormat.textContent = `${state.format || 'FLAC'} ${bits}-BIT / ${rateKhz}kHz`;
 
     const drVal = state.crestFactorDb !== undefined ? state.crestFactorDb.toFixed(1) : '14.0';
-    badgeDr.textContent = `DR ${drVal} dB`;
-    if (state.dynamicRating === 'DYNAMIC') {
-      badgeDr.className = 'badge badge-gold';
-    } else if (state.dynamicRating === 'COMPRESSED') {
-      badgeDr.className = 'badge';
-      badgeDr.style.color = '#ef4444';
+    if (remoteDrText) {
+      remoteDrText.textContent = `DR ${drVal} dB`;
     } else {
-      badgeDr.className = 'badge';
-      badgeDr.style.color = '#f5d485';
+      badgeDr.textContent = `DR ${drVal} dB`;
+    }
+
+    if (remoteDrDot) {
+      remoteDrDot.className = 'dr-meter-dot';
+      if (state.dynamicRating === 'DYNAMIC' || state.crestFactorDb >= 13) {
+        remoteDrDot.classList.add('dynamic');
+      } else if (state.dynamicRating === 'COMPRESSED' || state.crestFactorDb < 8) {
+        remoteDrDot.classList.add('compressed');
+      } else {
+        remoteDrDot.classList.add('balanced');
+      }
+    }
+
+    // Master Edition Theme Synchronization
+    if (newState.activeThemeId && newState.activeThemeId !== state.activeThemeId) {
+      applyRemoteTheme(newState.activeThemeId, false);
+    }
+
+    // Pure Mode & Phase Invert Controls
+    if (remotePhaseInvert) {
+      remotePhaseInvert.classList.toggle('active', !!state.phaseInvert);
+    }
+
+    if (remotePureMode) {
+      remotePureMode.textContent = `Pure Mode: ${state.isBitPerfect ? 'ON' : 'OFF'}`;
+      remotePureMode.classList.toggle('active', !!state.isBitPerfect);
+    }
+
+    // 32-Bit Signal Path Telemetry
+    if (telPureMode && telPureDot && telPureText) {
+      telPureDot.classList.toggle('active', !!state.isBitPerfect);
+      telPureText.textContent = `Pure Mode: ${state.isBitPerfect ? 'ON' : 'OFF'}`;
+    }
+    if (telDcFilter) {
+      const dot = telDcFilter.querySelector('.telemetry-dot');
+      if (dot) dot.classList.toggle('active', state.subsonicFilterEnabled !== false);
+    }
+    if (telNoiseGate) {
+      const dot = telNoiseGate.querySelector('.telemetry-dot');
+      if (dot) dot.classList.toggle('active', state.noiseGateEnabled !== false);
     }
 
     // Play / Pause Icon
@@ -926,6 +1057,11 @@
   }
 
   function extractCoverPaletteRemote(img) {
+    if (state.backdropMode === 'harmonized') {
+      const pal = MASTER_THEME_PALETTES[state.activeThemeId] || MASTER_THEME_PALETTES.gold;
+      setRemoteMeshPalette(pal);
+      return;
+    }
     if (!img || !img.naturalWidth || img.naturalWidth <= 2) return;
     try {
       const sCtx = meshSamplerCanvas.getContext('2d', { willReadFrequently: true });
@@ -1259,7 +1395,8 @@
     const meta = STEREO_MODE_META[mode] || STEREO_MODE_META['true-stereo'];
     if (stereoLivePill) {
       const swapSuffix = state.channelSwap ? ' • L↔R' : '';
-      stereoLivePill.textContent = `${meta.pill}${swapSuffix}`;
+      const invertSuffix = state.phaseInvert ? ' • 180°' : '';
+      stereoLivePill.textContent = `${meta.pill}${swapSuffix}${invertSuffix}`;
     }
     if (stereoModeDesc) {
       stereoModeDesc.textContent = meta.desc;
@@ -1284,6 +1421,13 @@
 
     if (remoteChannelSwap) {
       remoteChannelSwap.classList.toggle('active', !!state.channelSwap);
+    }
+    if (remotePhaseInvert) {
+      remotePhaseInvert.classList.toggle('active', !!state.phaseInvert);
+    }
+    if (remotePureMode) {
+      remotePureMode.textContent = `Pure Mode: ${state.isBitPerfect ? 'ON' : 'OFF'}`;
+      remotePureMode.classList.toggle('active', !!state.isBitPerfect);
     }
   }
 
@@ -1371,6 +1515,45 @@
     });
   }
 
+  if (remotePhaseInvert) {
+    remotePhaseInvert.addEventListener('click', () => {
+      haptic(14);
+      state.phaseInvert = !state.phaseInvert;
+      updateStereoUI();
+      sendCommand('set-phase-invert', { invert: state.phaseInvert });
+    });
+  }
+
+  if (remotePureMode) {
+    remotePureMode.addEventListener('click', () => {
+      haptic(14);
+      state.isBitPerfect = !state.isBitPerfect;
+      updateStereoUI();
+      sendCommand('set-pure-mode', { enabled: state.isBitPerfect });
+    });
+  }
+
+  // Master Edition Theme Controls
+  if (remoteThemePill) {
+    remoteThemePill.addEventListener('click', () => {
+      haptic(14);
+      const currentIndex = MASTER_THEMES.findIndex(t => t.id === state.activeThemeId);
+      const nextIndex = (currentIndex + 1) % MASTER_THEMES.length;
+      applyRemoteTheme(MASTER_THEMES[nextIndex].id, true);
+    });
+  }
+
+  if (remoteThemeGrid) {
+    const swatches = remoteThemeGrid.querySelectorAll('.remote-swatch-btn');
+    swatches.forEach(btn => {
+      btn.addEventListener('click', () => {
+        haptic(14);
+        const tid = btn.getAttribute('data-theme');
+        if (tid) applyRemoteTheme(tid, true);
+      });
+    });
+  }
+
   // 6. Acoustic Target Preset Switching
   presetSelector.addEventListener('change', (e) => {
     haptic(14);
@@ -1379,6 +1562,7 @@
   });
 
   // Initialize
+  applyRemoteTheme(state.activeThemeId, false);
   updateStereoUI();
   connect();
   startProgressLoop();

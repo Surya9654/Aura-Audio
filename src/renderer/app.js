@@ -1104,6 +1104,9 @@ function setBitPerfect(enabled) {
   eqSlidersStrip.style.opacity = enabled ? '0.4' : '1';
   eqSlidersStrip.style.filter = enabled ? 'grayscale(0.6)' : 'none';
   updateSignalPath();
+  if (typeof broadcastRemoteState === 'function') {
+    broadcastRemoteState(true);
+  }
 }
 
 btnToggleBitperfect.addEventListener('click', () => setBitPerfect(!state.isBitPerfect));
@@ -2340,7 +2343,10 @@ function broadcastRemoteState(force = false, isTick = false) {
     backdropMode: livingMesh.getBackdropMode(),
     subBass: Math.round((audioEngine.getSubBassEnergy ? audioEngine.getSubBassEnergy() : 0) * 1000) / 1000,
     meshPalette: livingMesh.getPalette(),
-    trackPath: track ? track.path : ''
+    trackPath: track ? track.path : '',
+    isBitPerfect: !!state.isBitPerfect,
+    subsonicFilterEnabled: !!audioEngine.subsonicFilterEnabled,
+    noiseGateEnabled: !!audioEngine.noiseGateEnabled
   };
 
   window.electronAPI.sendRemoteState(remotePayload);
@@ -2817,6 +2823,29 @@ function initConnectUI() {
         }
       } else if (cmd === 'rescan-library') {
         initApp();
+      } else if (cmd === 'set-theme') {
+        if (action.themeId && typeof applyTheme === 'function') {
+          applyTheme(action.themeId);
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-phase-invert') {
+        if (action.invert !== undefined) {
+          const inv = !!action.invert;
+          audioEngine.setPhaseInvert(inv);
+          if (togglePhaseInvert) togglePhaseInvert.checked = inv;
+          saveStereoSettings();
+          updateSignalPath();
+          broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-pure-mode' || cmd === 'toggle-pure-mode') {
+        const val = action.enabled !== undefined ? !!action.enabled : !state.isBitPerfect;
+        setBitPerfect(val);
+        broadcastRemoteState(true);
+      } else if (cmd === 'set-backdrop-mode') {
+        if (action.mode && typeof livingMesh.setBackdropMode === 'function') {
+          livingMesh.setBackdropMode(action.mode);
+          broadcastRemoteState(true);
+        }
       }
     });
   }
