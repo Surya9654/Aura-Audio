@@ -52,6 +52,40 @@
   z-index: 3;
 }
 
+.fs-output-wrapper {
+  position: absolute;
+  top: 52px;
+  right: 28px;
+  z-index: 4;
+}
+
+.fs-output-btn {
+  width: auto !important;
+  height: 40px !important;
+  border-radius: 999px !important;
+  padding: 0 14px !important;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-gold);
+}
+
+.fs-output-btn span {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-output-dropdown {
+  top: calc(100% + 10px) !important;
+  bottom: auto !important;
+  right: 0;
+  width: 300px;
+  transform-origin: top right !important;
+}
+
 .fs-content {
   position: relative;
   z-index: 2;

@@ -245,18 +245,35 @@
         <div class="sheet-card destination-card">
           <div class="sheet-row">
             <div>
-              <span class="sheet-label">Playback Audio Destination</span>
-              <div class="sheet-sublabel" id="remote-output-sublabel">Stream audio directly to this phone or to PC speakers/DAC</div>
+              <span class="sheet-label">Playback &amp; Output Routing</span>
+              <div class="sheet-sublabel" id="remote-output-sublabel">Route lossless audio &amp; select hardware output device</div>
             </div>
-            <select class="sheet-select" id="remote-output-selector">
-              <option value="phone">📱 This Phone / Mobile Device</option>
-              <option value="default" selected>💻 Desktop: System Default Audio</option>
+            <span class="spec-chip gold" id="remote-sync-badge">PC DIRECT</span>
+          </div>
+
+          <div class="dest-segmented-control" id="dest-segmented-control" style="margin-top: 10px;">
+            <button type="button" class="dest-seg-btn active" data-dest="desktop">💻 Desktop PC</button>
+            <button type="button" class="dest-seg-btn" data-dest="phone">📱 This Phone</button>
+            <button type="button" class="dest-seg-btn" data-dest="both">✨ Both (Sync)</button>
+          </div>
+
+          <div class="output-endpoint-row" style="margin-top: 12px;">
+            <div class="output-endpoint-label-wrap">
+              <span class="output-endpoint-label">PC Output Device</span>
+              <button type="button" class="output-rescan-mini-btn" id="btn-remote-rescan-outputs" title="Rescan PC audio devices">Rescan</button>
+            </div>
+            <select class="sheet-select output-full-select" id="remote-output-selector">
+              <option value="default" selected>System Default Audio</option>
             </select>
           </div>
-          <div class="dest-segmented-control" id="dest-segmented-control" style="margin-top: 10px;">
-            <button class="dest-seg-btn active" data-dest="desktop">💻 Desktop PC</button>
-            <button class="dest-seg-btn" data-dest="phone">📱 This Phone</button>
-            <button class="dest-seg-btn" data-dest="both">✨ Both (Sync)</button>
+
+          <div class="output-endpoint-row" id="remote-phone-sink-row" style="display: none; margin-top: 10px;">
+            <div class="output-endpoint-label-wrap">
+              <span class="output-endpoint-label">Phone Output Device</span>
+            </div>
+            <select class="sheet-select output-full-select" id="remote-phone-sink-selector">
+              <option value="default" selected>Phone Default Speaker / Headphones</option>
+            </select>
           </div>
         </div>
 
@@ -334,6 +351,13 @@
       </div>
     </div>
     <div class="mini-controls">
+      <button type="button" class="mini-btn-output" id="mini-btn-output" title="Select Output Device &amp; Sync Routing">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+          <circle cx="12" cy="14" r="4"></circle>
+          <line x1="12" y1="6" x2="12.01" y2="6"></line>
+        </svg>
+      </button>
       <button class="mini-btn-play" id="mini-btn-play">
         <svg width="18" height="18" id="mini-play-icon" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="6 4 20 12 6 20 6 4"></polygon>
@@ -341,6 +365,47 @@
       </button>
     </div>
   </aside>
+
+  <!-- Quick Output & Multi-Room Sync Drawer (Accessible from Any Screen) -->
+  <div class="remote-output-modal-backdrop" id="remote-output-modal" style="display: none;" aria-hidden="true">
+    <div class="remote-output-modal-sheet" role="dialog" aria-label="Output Device &amp; Sync Routing">
+      <div class="output-modal-header">
+        <div>
+          <div class="output-modal-title">Output &amp; Sync Routing</div>
+          <div class="output-modal-subtitle" id="modal-output-subtitle">Select playback target &amp; hardware endpoint</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="spec-chip gold" id="modal-sync-badge">PC DIRECT</span>
+          <button type="button" class="output-modal-close" id="btn-close-output-modal" aria-label="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="output-modal-section-label">PLAY AUDIO ON</div>
+      <div class="dest-segmented-control" id="modal-dest-segmented-control">
+        <button type="button" class="dest-seg-btn active" data-dest="desktop">💻 Desktop PC</button>
+        <button type="button" class="dest-seg-btn" data-dest="phone">📱 This Phone</button>
+        <button type="button" class="dest-seg-btn" data-dest="both">✨ Both (Sync)</button>
+      </div>
+
+      <div class="output-modal-section-header">
+        <span class="output-modal-section-label">DESKTOP PC OUTPUT DEVICES</span>
+        <button type="button" class="output-rescan-mini-btn" id="btn-modal-rescan-outputs">Rescan</button>
+      </div>
+      <div class="modal-device-list" id="modal-pc-output-list">
+        <button type="button" class="modal-device-item active" data-device-id="default">
+          <span class="modal-device-name">System Default Audio</span>
+          <span class="modal-device-check">✓</span>
+        </button>
+      </div>
+
+      <div id="modal-phone-output-section" style="display: none;">
+        <div class="output-modal-section-header">
+          <span class="output-modal-section-label">THIS PHONE OUTPUT DEVICES</span>
+        </div>
+        <div class="modal-device-list" id="modal-phone-output-list"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Native HTML5 Lossless Audio Stream for Mobile Phone Playback -->
   <audio id="remote-local-audio" preload="metadata" playsinline></audio>

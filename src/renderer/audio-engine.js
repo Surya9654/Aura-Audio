@@ -74,6 +74,8 @@ export class HighResAudioEngine {
     this.preampDb = 0;
     this.volume = 0.85;
     this.useDeviceVolume = false;
+    this.localMuted = false;
+    this.outputDeviceId = 'default';
 
     this.audioElement.addEventListener('error', () => {
       const err = this.audioElement.error;
@@ -513,35 +515,58 @@ export class HighResAudioEngine {
 
   async setOutputDevice(deviceId) {
     this.outputDeviceId = deviceId || 'default';
+    const normalizedSinkId = this.outputDeviceId === 'default' ? '' : this.outputDeviceId;
     let routed = false;
 
-    // 1. Route Web Audio context output (since stream connects to audioContext.destination)
+    // 1. Route Web Audio context output (W3C AudioContext.setSinkId uses '' for system default)
     if (this.audioContext && typeof this.audioContext.setSinkId === 'function') {
       try {
-        await this.audioContext.setSinkId(this.outputDeviceId);
+        await this.audioContext.setSinkId(normalizedSinkId);
         console.log(`[AudioEngine]: AudioContext output routed to device: ${this.outputDeviceId}`);
         routed = true;
       } catch (err) {
-        console.warn('AudioContext.setSinkId failed:', err);
+        try {
+          await this.audioContext.setSinkId(this.outputDeviceId);
+          routed = true;
+        } catch (fallbackErr) {
+          console.warn('AudioContext.setSinkId failed:', fallbackErr);
+        }
       }
     }
 
     // 2. Also route HTMLMediaElement
     if (this.audioElement && typeof this.audioElement.setSinkId === 'function') {
       try {
-        await this.audioElement.setSinkId(this.outputDeviceId);
+        await this.audioElement.setSinkId(normalizedSinkId);
         console.log(`[AudioEngine]: AudioElement output routed to device: ${this.outputDeviceId}`);
         routed = true;
       } catch (err) {
-        console.warn('AudioElement.setSinkId failed:', err);
+        try {
+          await this.audioElement.setSinkId(this.outputDeviceId);
+          routed = true;
+        } catch (fallbackErr) {
+          console.warn('AudioElement.setSinkId failed:', fallbackErr);
+        }
       }
     }
 
     return routed;
   }
 
+  getOutputLatencySec() {
+    if (!this.audioContext) return 0;
+    const base = Number(this.audioContext.baseLatency) || 0;
+    const out = Number(this.audioContext.outputLatency) || 0;
+    return Math.max(0, Math.min(0.5, base + out));
+  }
+
   setVolume(volume0to1) {
     this.volume = volume0to1;
+    this.applyVolume();
+  }
+
+  setLocalMute(muted) {
+    this.localMuted = !!muted;
     this.applyVolume();
   }
 
@@ -553,9 +578,9 @@ export class HighResAudioEngine {
   }
 
   applyVolume() {
-    const effective = this.useDeviceVolume ? 1.0 : (this.volume ?? 0.85);
+    const effective = this.localMuted ? 0.0 : (this.useDeviceVolume ? 1.0 : (this.volume ?? 0.85));
     if (this.gainNode && this.audioContext) {
-      this.gainNode.gain.setValueAtTime(effective, this.audioContext.currentTime);
+      this.gainNode.gain.setTargetAtTime(effective, this.audioContext.currentTime, 0.012);
     }
     this.audioElement.volume = 1.0;
   }

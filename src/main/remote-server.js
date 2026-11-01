@@ -42,7 +42,13 @@ class AuraRemoteServer {
       crestFactorDb: 10.5,
       activePreset: 'Reference',
       stereoMode: 'true-stereo',
-      isBitPerfect: false
+      isBitPerfect: false,
+      playbackDestination: 'desktop',
+      activeSinkDeviceId: 'default',
+      activeSinkDeviceLabel: 'System Default Audio',
+      availableOutputDevices: [],
+      stateTimestamp: Date.now(),
+      desktopOutputLatency: 0
     };
     this.coverBuffer = null;
     this.coverMime = 'image/jpeg';
@@ -316,9 +322,13 @@ class AuraRemoteServer {
 
       // 1. API: Current Playback State
       if (pathname === '/api/state') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         // Don't duplicate full base64 in state JSON; provide artwork URL endpoint
-        const stateCopy = { ...this.currentState, coverUrl: `/api/artwork?t=${this.coverTimestamp}` };
+        const stateCopy = {
+          ...this.currentState,
+          serverTime: Date.now(),
+          coverUrl: `/api/artwork?t=${this.coverTimestamp}`
+        };
         res.end(JSON.stringify(stateCopy));
         return;
       }
@@ -377,7 +387,15 @@ class AuraRemoteServer {
           if (range) {
             const parts = range.replace(/bytes=/, '').split('-');
             const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+            const end = parts[1] ? Math.min(totalSize - 1, parseInt(parts[1], 10)) : totalSize - 1;
+            if (isNaN(start) || isNaN(end) || start < 0 || start >= totalSize || end < start) {
+              res.writeHead(416, {
+                'Content-Range': `bytes */${totalSize}`,
+                'Access-Control-Allow-Origin': '*'
+              });
+              res.end();
+              return;
+            }
             const chunkSize = (end - start) + 1;
 
             res.writeHead(206, {
@@ -387,6 +405,8 @@ class AuraRemoteServer {
             });
 
             const stream = fs.createReadStream(targetPath, { start, end, highWaterMark: 256 * 1024 });
+            stream.on('error', () => { try { res.end(); } catch (e) {} });
+            res.on('close', () => { try { stream.destroy(); } catch (e) {} });
             stream.pipe(res);
           } else {
             res.writeHead(200, {
@@ -395,6 +415,8 @@ class AuraRemoteServer {
             });
 
             const stream = fs.createReadStream(targetPath, { highWaterMark: 256 * 1024 });
+            stream.on('error', () => { try { res.end(); } catch (e) {} });
+            res.on('close', () => { try { stream.destroy(); } catch (e) {} });
             stream.pipe(res);
           }
         } catch (err) {
@@ -531,14 +553,24 @@ class AuraRemoteServer {
           '.svg': 'image/svg+xml',
           '.ico': 'image/x-icon'
         };
-        res.writeHead(200, { 'Content-Type': mimes[ext] || 'application/octet-stream' });
-        fs.createReadStream(filePath).pipe(res);
+        const isShellCode = ext === '.html' || ext === '.css' || ext === '.js' || ext === '.json';
+        res.writeHead(200, {
+          'Content-Type': mimes[ext] || 'application/octet-stream',
+          'Cache-Control': isShellCode ? 'no-cache' : 'public, max-age=3600'
+        });
+        const staticStream = fs.createReadStream(filePath);
+        staticStream.on('error', () => { try { res.end(); } catch (e) {} });
+        res.on('close', () => { try { staticStream.destroy(); } catch (e) {} });
+        staticStream.pipe(res);
       } else {
         // Fallback to index.html for SPA routing
         const fallback = path.join(remoteDir, 'index.html');
         if (fs.existsSync(fallback)) {
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          fs.createReadStream(fallback).pipe(res);
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+          const fbStream = fs.createReadStream(fallback);
+          fbStream.on('error', () => { try { res.end(); } catch (e) {} });
+          res.on('close', () => { try { fbStream.destroy(); } catch (e) {} });
+          fbStream.pipe(res);
         } else {
           res.writeHead(404);
           res.end('Not found');
@@ -561,8 +593,10 @@ class AuraRemoteServer {
       // Send initial state immediately upon phone connection
       const initialPayload = {
         type: 'state',
+        serverTime: Date.now(),
         data: {
           ...this.currentState,
+          serverTime: Date.now(),
           coverUrl: `/api/artwork?t=${this.coverTimestamp}`
         }
       };
@@ -585,6 +619,17 @@ class AuraRemoteServer {
       ws.on('message', (message) => {
         try {
           const action = JSON.parse(message.toString());
+          // Sub-millisecond NTP clock-sync responder directly on WS socket (bypasses renderer IPC)
+          if (action && (action.command === 'sync-ping' || action.action === 'sync-ping')) {
+            if (ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                type: 'sync-pong',
+                clientSendTime: action.clientSendTime,
+                serverTime: Date.now()
+              }));
+            }
+            return;
+          }
           this.handleRemoteAction(action);
         } catch (err) {
           console.error('Remote WS message parse error:', err);
@@ -664,10 +709,13 @@ class AuraRemoteServer {
     };
 
     // Broadcast to all connected phones
+    const nowServer = Date.now();
     const payload = JSON.stringify({
       type: cleanState.isTick ? 'tick' : 'state',
+      serverTime: nowServer,
       data: {
         ...this.currentState,
+        serverTime: nowServer,
         coverUrl: `/api/artwork?t=${this.coverTimestamp}`
       }
     });

@@ -347,16 +347,26 @@
             <div class="signal-note" id="sp-note">Play a track to see exactly how it reaches your ears.</div>
           </div>
 
-          <!-- Playback Device Selection -->
-          <div class="setting-row">
-            <div>
-              <div class="setting-title" style="display: flex; align-items: center; gap: 8px;">
-                <span>Playback Output Device</span>
-                <span class="spec-chip gold" id="settings-output-chip">System Default Audio</span>
+          <!-- Playback Device & Multi-Device Destination Selection -->
+          <div class="setting-row" style="flex-direction: column; align-items: stretch; gap: 14px; padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+              <div>
+                <div class="setting-title" style="display: flex; align-items: center; gap: 8px;">
+                  <span>Playback Output Device &amp; Destination</span>
+                  <span class="spec-chip gold" id="settings-output-chip">System Default Audio</span>
+                </div>
+                <div class="setting-desc">Route bit-perfect 32-bit float audio to PC Speakers/Headphones/DAC, stream to Mobile Remote, or play synchronized on both.</div>
               </div>
-              <div class="setting-desc">Routes bit-perfect 32-bit float audio directly to your chosen Speakers, Headphones, Bluetooth headset, or USB Lossless DAC.</div>
+              <select id="select-playback-device" class="dsp-select" style="min-width: 240px; max-width: 340px; font-weight: 600;"></select>
             </div>
-            <select id="select-playback-device" class="dsp-select" style="min-width: 220px; max-width: 320px; font-weight: 600;"></select>
+            <div class="local-dest-row">
+              <span class="local-dest-label">Play Audio On</span>
+              <div class="stereo-mode-selector local-dest-selector" data-role="local-dest-group">
+                <button type="button" class="btn-segment active" data-dest="desktop">Desktop PC</button>
+                <button type="button" class="btn-segment" data-dest="phone">Remote Device</button>
+                <button type="button" class="btn-segment" data-dest="both">Both (Synced)</button>
+              </div>
+            </div>
           </div>
 
           <!-- Theme Personalisation: Master Edition Accent & Living Mesh Alignment -->
@@ -631,14 +641,23 @@
 
           <!-- 2. Windows Sound Output Endpoints & Bluetooth Devices -->
           <div class="signal-path" style="padding: 24px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 12px;">
               <div>
-                <h3 style="margin: 0; font-size: 16px;">Sound Output Endpoints &amp; Bluetooth Devices</h3>
+                <h3 style="margin: 0; font-size: 16px;">Sound Output Endpoints &amp; Multi-Device Routing</h3>
                 <p style="margin: 4px 0 0 0; font-size: 12.5px; color: var(--text-muted);">
-                  Windows detected audio render endpoints, soundbars, Bluetooth headphones, and USB DACs. Select an endpoint to route playback directly.
+                  Choose where audio plays (Desktop PC, Mobile Remote, or Both Synced) and select any Windows endpoint, Bluetooth headset, or USB DAC.
                 </p>
               </div>
               <span class="spec-chip gold" id="active-sink-tag">CURRENT: DEFAULT</span>
+            </div>
+
+            <div class="local-dest-row" style="margin-bottom: 16px;">
+              <span class="local-dest-label">Playback Target</span>
+              <div class="stereo-mode-selector local-dest-selector" data-role="local-dest-group">
+                <button type="button" class="btn-segment active" data-dest="desktop">Desktop PC</button>
+                <button type="button" class="btn-segment" data-dest="phone">Remote Device</button>
+                <button type="button" class="btn-segment" data-dest="both">Both (Synced)</button>
+              </div>
             </div>
 
             <div class="device-grid" id="connect-devices-grid">
@@ -702,12 +721,18 @@
 
       <!-- Quick Playback Output Device Picker -->
       <div class="quick-output-wrapper" id="quick-output-wrapper" style="position: relative;">
-        <button class="btn-ctrl" id="btn-quick-output" title="Playback Output Device" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent-alpha35); background: var(--accent-alpha07);">
+        <button class="btn-ctrl" id="btn-quick-output" title="Playback Output Device &amp; Target" style="font-size: 11.5px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent-alpha35); background: var(--accent-alpha07);">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-          <span id="quick-output-label" style="max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Default Audio</span>
+          <span id="quick-output-label" style="max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Default Audio</span>
         </button>
         <div class="quick-output-dropdown" id="quick-output-menu" style="display: none;">
-          <div class="quick-output-header">Select Playback Device</div>
+          <div class="quick-output-header">Play Audio On</div>
+          <div class="quick-dest-strip" data-role="local-dest-group">
+            <button type="button" class="quick-dest-btn active" data-dest="desktop">Desktop PC</button>
+            <button type="button" class="quick-dest-btn" data-dest="phone">Remote</button>
+            <button type="button" class="quick-dest-btn" data-dest="both">Both Sync</button>
+          </div>
+          <div class="quick-output-header" style="margin-top: 8px;">Desktop Output Device</div>
           <div class="quick-output-list" id="quick-output-list"></div>
         </div>
       </div>
@@ -746,6 +771,24 @@
     <button class="glass-btn glass-btn-sm fs-close" id="fs-close" title="Back to library" aria-label="Back to library">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </button>
+
+    <!-- Fullscreen Output Device & Target Selector -->
+    <div class="fs-output-wrapper" id="fs-output-wrapper">
+      <button class="glass-btn fs-output-btn" id="fs-btn-output" title="Select Output Device &amp; Target" aria-label="Select Output Device">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        <span id="fs-output-label">Default Audio</span>
+      </button>
+      <div class="quick-output-dropdown fs-output-dropdown" id="fs-output-menu" style="display: none;">
+        <div class="quick-output-header">Play Audio On</div>
+        <div class="quick-dest-strip" data-role="local-dest-group">
+          <button type="button" class="quick-dest-btn active" data-dest="desktop">Desktop PC</button>
+          <button type="button" class="quick-dest-btn" data-dest="phone">Remote</button>
+          <button type="button" class="quick-dest-btn" data-dest="both">Both Sync</button>
+        </div>
+        <div class="quick-output-header" style="margin-top: 8px;">Desktop Output Device</div>
+        <div class="quick-output-list" id="fs-output-list"></div>
+      </div>
+    </div>
 
     <div class="fs-content">
       <div class="fs-art" id="fs-art"></div>

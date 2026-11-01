@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -83,7 +83,12 @@ function startStreamingServer() {
         if (range) {
           const parts = range.replace(/bytes=/, '').split('-');
           const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+          const end = parts[1] ? Math.min(totalSize - 1, parseInt(parts[1], 10)) : totalSize - 1;
+          if (isNaN(start) || isNaN(end) || start < 0 || start >= totalSize || end < start) {
+            res.writeHead(416, { 'Content-Range': `bytes */${totalSize}` });
+            res.end();
+            return;
+          }
           const chunkSize = (end - start) + 1;
 
           res.writeHead(206, {
@@ -93,6 +98,8 @@ function startStreamingServer() {
           });
 
           const stream = fs.createReadStream(rawFilePath, { start, end, highWaterMark: STREAM_BUFFER_BYTES });
+          stream.on('error', () => { try { res.end(); } catch (e) {} });
+          res.on('close', () => { try { stream.destroy(); } catch (e) {} });
           stream.pipe(res);
         } else {
           res.writeHead(200, {
@@ -101,6 +108,8 @@ function startStreamingServer() {
           });
 
           const stream = fs.createReadStream(rawFilePath, { highWaterMark: STREAM_BUFFER_BYTES });
+          stream.on('error', () => { try { res.end(); } catch (e) {} });
+          res.on('close', () => { try { stream.destroy(); } catch (e) {} });
           stream.pipe(res);
         }
       } catch (err) {
@@ -545,6 +554,12 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
+    try {
+      if (session && session.defaultSession) {
+        session.defaultSession.setPermissionCheckHandler(() => true);
+        session.defaultSession.setPermissionRequestHandler((_wc, _perm, callback) => callback(true));
+      }
+    } catch (e) {}
     const gpu = app.getGPUFeatureStatus();
     console.log(`[Aura 3.2 GPU Engine] Rasterization: ${gpu.gpu_rasterization} | Zero-Copy: ${gpu.rasterization} | Canvas OOP: ${gpu.canvas_oop_rasterization} | Compositing: ${gpu.gpu_compositing}`);
     await startStreamingServer();

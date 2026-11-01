@@ -62,6 +62,7 @@ const state = {
   dacGuardEnabled: true,
   detectedDACs: [],
   activeHardwareDevice: null,
+  playbackDestination: 'desktop',
   currentFilter: 'ALL',
   searchQuery: '',
   activeSearchTokens: []
@@ -609,10 +610,18 @@ function updateSignalPath() {
   set('sp-dsp', bypass ? 'Pure Mode (bypassed)' : presetName);
   set('sp-dsp-sub', bypass ? `Bypassed EQ/Preamp${stereoLabel}${swapLabel}${invertLabel}${gateLabel}` : `32-bit float • 10-band EQ • Preamp ${preamp > 0 ? '+' : ''}${preamp.toFixed(1)} dB${stereoLabel}${swapLabel}${invertLabel}${dcLabel}${gateLabel}`);
 
-  const devName = state.activeHardwareDevice ? state.activeHardwareDevice.name : (state.detectedDACs[0] ? state.detectedDACs[0].name : 'System audio');
+  const baseDevName = (typeof activeSinkDeviceLabel === 'string' && activeSinkDeviceLabel)
+    ? activeSinkDeviceLabel
+    : (state.activeHardwareDevice ? state.activeHardwareDevice.name : (state.detectedDACs[0] ? state.detectedDACs[0].name : 'System audio'));
+  const destMode = state.playbackDestination || 'desktop';
+  const devName = destMode === 'phone'
+    ? 'Remote Device (Wi-Fi Lossless Stream)'
+    : (destMode === 'both' ? `${baseDevName} + Remote (Synced)` : baseDevName);
   const outRate = audioEngine.outputSampleRate;
   set('sp-output', devName);
-  set('sp-output-sub', `32-Bit Float Engine${outRate ? ' • ' + (outRate / 1000).toFixed(1) + ' kHz' : ''}${state.deviceVolume ? ' • device volume' : ''}`);
+  set('sp-output-sub', destMode === 'phone'
+    ? 'Direct HTTP Byte-Range Stream • Clock-Locked'
+    : `32-Bit Float Engine${outRate ? ' • ' + (outRate / 1000).toFixed(1) + ' kHz' : ''}${destMode === 'both' ? ' • NTP PLL Sync' : ''}${state.deviceVolume ? ' • device volume' : ''}`);
 
   let note = 'Play a track to see exactly how it reaches your ears.';
   if (track) {
@@ -631,8 +640,13 @@ function updateSignalPath() {
 }
 
 // 4. Playback Logic
+let isSwitchingTrack = false;
+let currentPlayToken = 0;
+
 async function playTrackIndex(index, transitionDir = null) {
   if (index < 0 || index >= state.filteredTracks.length) return;
+  const playToken = ++currentPlayToken;
+  isSwitchingTrack = true;
 
   // Immediately halt any previous audio playback to guarantee no overlapping streams
   try {
@@ -693,10 +707,17 @@ async function playTrackIndex(index, transitionDir = null) {
   // Load and play
   try {
     await audioEngine.loadTrack(track);
+    if (playToken !== currentPlayToken) return;
     await audioEngine.play();
+    if (playToken !== currentPlayToken) return;
+    isSwitchingTrack = false;
     updatePlayPauseState(true);
     if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
   } catch (e) {
+    if (playToken === currentPlayToken) {
+      isSwitchingTrack = false;
+      updatePlayPauseState(false);
+    }
     console.error('Audio load error:', e);
   }
 }
@@ -811,6 +832,8 @@ btnPrev.addEventListener('click', () => {
     if (!audioEngine.isPlaying) {
       audioEngine.play();
       updatePlayPauseState(true);
+    } else if (typeof broadcastRemoteState === 'function') {
+      broadcastRemoteState(true);
     }
     return;
   }
@@ -839,6 +862,7 @@ scrubber.addEventListener('input', (e) => {
     scrubber.style.setProperty('--p', `${e.target.value}%`);
     currentTimeEl.textContent = formatDuration((e.target.value / 100) * el.duration);
     audioEngine.seek((e.target.value / 100) * el.duration);
+    if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
   }
 });
 
@@ -857,6 +881,29 @@ volumeSlider.addEventListener('input', (e) => {
   }
   if (typeof broadcastRemoteState === 'function') broadcastRemoteState();
 });
+volumeSlider.addEventListener('change', () => {
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
+});
+const btnLocalMute = document.getElementById('btn-mute');
+if (btnLocalMute) {
+  btnLocalMute.addEventListener('click', () => {
+    const cur = parseFloat(volumeSlider.value);
+    if (cur > 0) {
+      volumeSlider.dataset.prevVol = String(cur);
+      volumeSlider.value = 0;
+      audioEngine.setVolume(0);
+      setVolumeFill();
+      volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>';
+    } else {
+      const restore = parseFloat(volumeSlider.dataset.prevVol || '0.85') || 0.85;
+      volumeSlider.value = restore;
+      audioEngine.setVolume(restore);
+      setVolumeFill();
+      volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
+    }
+    if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
+  });
+}
 setVolumeFill();
 
 // Silky progress & Dynamic Range Heatmap: drive the scrubber from requestAnimationFrame at 60 FPS
@@ -1478,19 +1525,26 @@ function setupMediaSessionHandlers() {
     ms.setActionHandler('seekto', (details) => {
       if (details.seekTime !== undefined && audioEngine.audioElement) {
         audioEngine.seek(details.seekTime);
+        if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
       }
     });
   } catch (e) {}
   try {
     ms.setActionHandler('seekbackward', (details) => {
       const el = audioEngine.audioElement;
-      if (el) audioEngine.seek(Math.max(0, el.currentTime - (details.seekOffset || 10)));
+      if (el) {
+        audioEngine.seek(Math.max(0, el.currentTime - (details.seekOffset || 10)));
+        if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
+      }
     });
   } catch (e) {}
   try {
     ms.setActionHandler('seekforward', (details) => {
       const el = audioEngine.audioElement;
-      if (el) audioEngine.seek(Math.min(el.duration, el.currentTime + (details.seekOffset || 10)));
+      if (el) {
+        audioEngine.seek(Math.min(el.duration, el.currentTime + (details.seekOffset || 10)));
+        if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
+      }
     });
   } catch (e) {}
 }
@@ -1602,6 +1656,7 @@ function initLockscreenWidgetUI() {
         const val = e.target.value;
         sc.style.setProperty('--p', `${val}%`);
         audioEngine.seek((val / 100) * el.duration);
+        if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
       }
     });
   });
@@ -1628,9 +1683,22 @@ toggleMediaWidget.addEventListener('change', (e) => {
   updateMediaSession(mediaWidgetEnabled ? state.filteredTracks[state.currentTrackIndex] : null);
 });
 
-// Keep widget playback state/position in sync with the audio element
-audioEngine.audioElement.addEventListener('play', () => { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; updatePlayPauseState(true); });
-audioEngine.audioElement.addEventListener('pause', () => { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; updatePlayPauseState(false); });
+// Keep widget & remote playback state/position tightly anchored to hardware audio events
+audioEngine.audioElement.addEventListener('play', () => {
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+  updatePlayPauseState(true);
+});
+audioEngine.audioElement.addEventListener('playing', () => {
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
+});
+audioEngine.audioElement.addEventListener('seeked', () => {
+  if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
+});
+audioEngine.audioElement.addEventListener('pause', () => {
+  if (isSwitchingTrack) return; // Suppress transient pause event during track switch
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+  updatePlayPauseState(false);
+});
 audioEngine.audioElement.addEventListener('loadedmetadata', () => {
   updateMediaSession(state.filteredTracks[state.currentTrackIndex]);
 });
@@ -1844,6 +1912,7 @@ fsScrubber.addEventListener('input', (e) => {
     fsScrubber.style.setProperty('--p', `${e.target.value}%`);
     document.getElementById('fs-current').textContent = formatDuration((e.target.value / 100) * el.duration);
     audioEngine.seek((e.target.value / 100) * el.duration);
+    if (typeof broadcastRemoteState === 'function') broadcastRemoteState(true);
   }
 });
 
@@ -2297,7 +2366,72 @@ let cachedPlaybackDevices = [];
 let lastRemoteBroadcastTimestamp = 0;
 let lastSentCoverTrackPath = null;
 
-async function selectPlaybackDevice(deviceId, name = '') {
+// Initialize audioEngine with persisted output device ID immediately
+if (audioEngine && activeSinkDeviceId) {
+  audioEngine.outputDeviceId = activeSinkDeviceId;
+}
+
+function updateLocalOutputLabels() {
+  const dest = state.playbackDestination || 'desktop';
+  const shortDev = activeSinkDeviceLabel || 'Default Audio';
+  const badgeText = dest === 'phone'
+    ? 'Remote Device'
+    : (dest === 'both' ? `Sync • ${shortDev}` : shortDev);
+  const fullDesc = dest === 'phone'
+    ? 'Streaming to Remote Device (Desktop Muted)'
+    : (dest === 'both' ? `Synchronized: ${shortDev} + Remote Device` : `Playback Output: ${shortDev}`);
+
+  const quickOutputLabel = document.getElementById('quick-output-label');
+  if (quickOutputLabel) {
+    quickOutputLabel.textContent = badgeText;
+    quickOutputLabel.title = fullDesc;
+  }
+
+  const fsOutputLabel = document.getElementById('fs-output-label');
+  if (fsOutputLabel) {
+    fsOutputLabel.textContent = badgeText;
+    fsOutputLabel.title = fullDesc;
+  }
+
+  const settingsOutputChip = document.getElementById('settings-output-chip');
+  if (settingsOutputChip) {
+    settingsOutputChip.textContent = dest === 'phone'
+      ? 'Remote Device Only'
+      : (dest === 'both' ? `${shortDev} + Remote` : shortDev);
+  }
+
+  const activeSinkTag = document.getElementById('active-sink-tag');
+  if (activeSinkTag) {
+    const tagStr = dest === 'phone'
+      ? 'REMOTE STREAM'
+      : (dest === 'both' ? `SYNC: ${shortDev.toUpperCase().slice(0, 18)}` : shortDev.toUpperCase().slice(0, 26));
+    activeSinkTag.textContent = `CURRENT: ${tagStr}`;
+  }
+
+  document.querySelectorAll('[data-role="local-dest-group"]').forEach(group => {
+    group.querySelectorAll('[data-dest]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-dest') === dest);
+    });
+  });
+}
+
+function setPlaybackDestinationLocal(dest, notifyRemote = true) {
+  if (!['desktop', 'phone', 'both'].includes(dest)) dest = 'desktop';
+  state.playbackDestination = dest;
+
+  // Mute only the local PC gain stage when streaming exclusively to Phone; preserve master volume!
+  if (audioEngine) {
+    audioEngine.setLocalMute(dest === 'phone');
+  }
+
+  updateLocalOutputLabels();
+  updateSignalPath();
+  if (notifyRemote) {
+    broadcastRemoteState(true);
+  }
+}
+
+async function selectPlaybackDevice(deviceId, name = '', switchFromPhoneOnly = false) {
   activeSinkDeviceId = deviceId || 'default';
   if (name) {
     activeSinkDeviceLabel = name;
@@ -2309,29 +2443,21 @@ async function selectPlaybackDevice(deviceId, name = '') {
   localStorage.setItem('aura.sinkDeviceId', activeSinkDeviceId);
   localStorage.setItem('aura.sinkDeviceLabel', activeSinkDeviceLabel);
 
+  // If user explicitly picked a local PC speaker/DAC on Desktop while in Phone-only mode, unmute Desktop
+  if (switchFromPhoneOnly && state.playbackDestination === 'phone') {
+    state.playbackDestination = 'desktop';
+    if (audioEngine) audioEngine.setLocalMute(false);
+  }
+
   if (audioEngine) {
     await audioEngine.setOutputDevice(activeSinkDeviceId);
   }
 
-  const quickOutputLabel = document.getElementById('quick-output-label');
-  if (quickOutputLabel) {
-    quickOutputLabel.textContent = activeSinkDeviceLabel;
-    quickOutputLabel.title = `Playback Output: ${activeSinkDeviceLabel}`;
-  }
-
-  const settingsOutputChip = document.getElementById('settings-output-chip');
-  if (settingsOutputChip) {
-    settingsOutputChip.textContent = activeSinkDeviceLabel;
-  }
   const selectPlayback = document.getElementById('select-playback-device');
   if (selectPlayback && selectPlayback.value !== activeSinkDeviceId) {
     selectPlayback.value = activeSinkDeviceId;
   }
 
-  const activeSinkTag = document.getElementById('active-sink-tag');
-  if (activeSinkTag) {
-    activeSinkTag.textContent = `CURRENT: ${activeSinkDeviceLabel.toUpperCase().slice(0, 26)}`;
-  }
   const connectGrid = document.getElementById('connect-devices-grid');
   if (connectGrid) {
     connectGrid.querySelectorAll('.device-card').forEach(c => {
@@ -2342,16 +2468,18 @@ async function selectPlaybackDevice(deviceId, name = '') {
     });
   }
 
-  const quickList = document.getElementById('quick-output-list');
-  if (quickList) {
-    quickList.querySelectorAll('.quick-output-item').forEach(item => {
+  ['quick-output-list', 'fs-output-list'].forEach(listId => {
+    const listEl = document.getElementById(listId);
+    if (!listEl) return;
+    listEl.querySelectorAll('.quick-output-item').forEach(item => {
       const isAct = item.dataset.deviceId === activeSinkDeviceId;
       item.classList.toggle('active', isAct);
       const chk = item.querySelector('.quick-output-check');
       if (chk) chk.style.display = isAct ? 'inline-block' : 'none';
     });
-  }
+  });
 
+  updateLocalOutputLabels();
   updateSignalPath();
   broadcastRemoteState(true);
 }
@@ -2366,6 +2494,8 @@ function broadcastRemoteState(force = false, isTick = false) {
 
   const track = state.filteredTracks[state.currentTrackIndex] || state.currentTrack;
   const el = audioEngine.audioElement;
+  const sampleWallTime = Date.now();
+  const sampledCurrentTime = el ? el.currentTime : 0;
   const metrics = audioEngine.getDynamicsMetrics ? audioEngine.getDynamicsMetrics() : { crestFactorDb: 10, dynamicRating: 'BALANCED' };
 
   // Only transfer raw heavy base64 coverData if the track path has actually changed
@@ -2377,12 +2507,15 @@ function broadcastRemoteState(force = false, isTick = false) {
 
   const remotePayload = {
     isTick,
+    stateTimestamp: sampleWallTime,
+    desktopOutputLatency: audioEngine.getOutputLatencySec ? audioEngine.getOutputLatencySec() : 0,
     title: track ? (track.title || 'Unknown Title') : 'Aura Lossless Studio',
     artist: track ? (track.artist || 'Unknown Artist') : 'Ready for Playback',
     album: track ? (track.album || 'Studio Reference') : 'Studio Reference',
     duration: el && isFinite(el.duration) && el.duration > 0 ? el.duration : (track ? track.duration : 0),
-    currentTime: el ? el.currentTime : 0,
+    currentTime: sampledCurrentTime,
     isPlaying: audioEngine.isPlaying,
+    isTrackLoading: isSwitchingTrack,
     volume: audioEngine.volume !== undefined ? audioEngine.volume : 0.85,
     sampleRate: track ? track.sampleRate : 44100,
     bitsPerSample: track ? track.bitsPerSample : 16,
@@ -2407,9 +2540,16 @@ function broadcastRemoteState(force = false, isTick = false) {
     isBitPerfect: !!state.isBitPerfect,
     subsonicFilterEnabled: !!audioEngine.subsonicFilterEnabled,
     noiseGateEnabled: !!audioEngine.noiseGateEnabled,
+    playbackDestination: state.playbackDestination || 'desktop',
     activeSinkDeviceId,
     activeSinkDeviceLabel,
-    availableOutputDevices: (cachedPlaybackDevices || []).map(d => ({ deviceId: d.deviceId, name: d.name, type: d.type }))
+    availableOutputDevices: (cachedPlaybackDevices || []).map(d => ({
+      deviceId: d.deviceId,
+      name: d.name,
+      type: d.type,
+      isBluetooth: !!d.isBluetooth,
+      isDAC: !!d.isDAC
+    }))
   };
 
   window.electronAPI.sendRemoteState(remotePayload);
@@ -2436,20 +2576,16 @@ function broadcastRemoteLibrary() {
 
 async function loadConnectDevices() {
   const container = document.getElementById('connect-devices-grid');
-  const activeSinkTag = document.getElementById('active-sink-tag');
-  if (!container) return;
 
-  if (activeSinkTag) {
-    activeSinkTag.textContent = `CURRENT: ${activeSinkDeviceLabel.toUpperCase()}`;
+  if (container) {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; grid-column: 1 / -1;">
+        Interrogating audio render endpoints and Bluetooth devices...
+      </div>
+    `;
   }
 
-  container.innerHTML = `
-    <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; grid-column: 1 / -1;">
-      Interrogating audio render endpoints and Bluetooth devices...
-    </div>
-  `;
-
-  let winDevices = { audioEndpoints: [], bluetoothDevices: [] };
+  let winDevices = { outputs: [], bluetooth: [] };
   let mediaDevices = [];
 
   try {
@@ -2469,15 +2605,20 @@ async function loadConnectDevices() {
     console.warn('enumerateDevices error:', e);
   }
 
-  container.innerHTML = '';
+  if (container) container.innerHTML = '';
 
-  // Consolidate devices
+  const winOutputs = (winDevices && Array.isArray(winDevices.outputs)) ? winDevices.outputs : [];
+
+  // Consolidate selectable audio output endpoints
   const renderedList = [];
+  const defaultMedia = mediaDevices.find(d => d.deviceId === 'default');
+  const defaultCleanHint = defaultMedia && defaultMedia.label
+    ? defaultMedia.label.replace(/^Default\s*-\s*/i, '').trim()
+    : '';
 
-  // Default system audio output
   renderedList.push({
     deviceId: 'default',
-    name: 'System Default Audio',
+    name: defaultCleanHint ? `System Default (${defaultCleanHint})` : 'System Default Audio',
     type: 'Windows Master Mixer',
     iconType: 'speaker',
     isBluetooth: false,
@@ -2485,15 +2626,26 @@ async function loadConnectDevices() {
     isDefault: true
   });
 
-  // Media Devices from browser
-  mediaDevices.forEach(md => {
-    if (md.deviceId === 'default' || !md.label) return;
-    const isBt = /bluetooth|wireless|buds|bullets|headphone|airpod|soundbar|hands-free/i.test(md.label);
-    const isDac = /dac|spark|audiocular|fiio|topping|chord|audioquest|dongle|hifi/i.test(md.label);
+  // Real routable Chromium audiooutput sinkIds (skip synthetic 'default' & 'communications' aliases)
+  const seenLabels = new Set();
+  mediaDevices.forEach((md, idx) => {
+    if (!md.deviceId || md.deviceId === 'default' || md.deviceId === 'communications') return;
+    const rawLabel = (md.label || '').trim() || `Audio Output Endpoint ${idx + 1}`;
+    const cleanLabel = rawLabel.replace(/^(?:Default|Communications)\s*-\s*/i, '').trim();
+    const labelKey = cleanLabel.toLowerCase();
+    if (seenLabels.has(labelKey)) return;
+    seenLabels.add(labelKey);
+
+    const winMatch = winOutputs.find(ep =>
+      ep.name && (cleanLabel.toLowerCase().includes(ep.name.toLowerCase()) || ep.name.toLowerCase().includes(cleanLabel.toLowerCase()))
+    );
+    const isBt = /bluetooth|wireless|buds|bullets|headphone|airpod|soundbar|hands-free|wh-|wf-/i.test(cleanLabel) || !!(winMatch && winMatch.icon === 'bluetooth');
+    const isDac = /dac|spark|audiocular|fiio|topping|chord|audioquest|dongle|hifi|schiit|moondrop|qudelix|focusrite|rme/i.test(cleanLabel) || !!(winMatch && winMatch.icon === 'dac');
+
     renderedList.push({
       deviceId: md.deviceId,
-      name: md.label,
-      type: isDac ? 'USB High-Res DAC' : (isBt ? 'Bluetooth Wireless Audio' : 'Audio Output Endpoint'),
+      name: cleanLabel,
+      type: isDac ? 'USB High-Res DAC' : (isBt ? 'Bluetooth Wireless Audio' : (winMatch && winMatch.type ? winMatch.type : 'Audio Output Endpoint')),
       iconType: isBt ? 'bluetooth' : (isDac ? 'dac' : 'speaker'),
       isBluetooth: isBt,
       isDAC: isDac,
@@ -2501,22 +2653,39 @@ async function loadConnectDevices() {
     });
   });
 
-  // Also include any Bluetooth / Endpoint devices discovered by Windows that may not be enumerated yet
-  if (winDevices && Array.isArray(winDevices.audioEndpoints)) {
-    winDevices.audioEndpoints.forEach(ep => {
-      const exists = renderedList.some(r => r.name.toLowerCase().includes(ep.name.toLowerCase()) || ep.name.toLowerCase().includes(r.name.toLowerCase()));
-      if (!exists && ep.name) {
+  // Fallback if Chromium mediaDevices returned no discrete endpoints yet: surface active Windows PnP outputs
+  if (renderedList.length === 1 && winOutputs.length > 0) {
+    winOutputs.filter(ep => ep.isActive && ep.name).forEach(ep => {
+      const exists = renderedList.some(r => r.name.toLowerCase().includes(ep.name.toLowerCase()));
+      if (!exists) {
+        const isBt = ep.icon === 'bluetooth';
+        const isDac = ep.icon === 'dac';
         renderedList.push({
-          deviceId: ep.id || '',
+          deviceId: 'default',
           name: ep.name,
-          type: ep.isDAC ? 'USB High-Res DAC' : (ep.isBluetooth ? 'Bluetooth Sound Endpoint' : 'Audio Endpoint'),
-          iconType: ep.isBluetooth ? 'bluetooth' : (ep.isDAC ? 'dac' : 'speaker'),
-          isBluetooth: ep.isBluetooth,
-          isDAC: ep.isDAC,
-          isDefault: ep.isDefault || false
+          type: ep.type || 'Audio Output Endpoint',
+          iconType: ep.icon || 'speaker',
+          isBluetooth: isBt,
+          isDAC: isDac,
+          isDefault: false
         });
       }
     });
+  }
+
+  // Validate saved activeSinkDeviceId against currently connected routable devices
+  const activeEntry = renderedList.find(d => d.deviceId === activeSinkDeviceId);
+  if (!activeEntry) {
+    activeSinkDeviceId = 'default';
+    activeSinkDeviceLabel = renderedList[0].name;
+    localStorage.setItem('aura.sinkDeviceId', activeSinkDeviceId);
+    localStorage.setItem('aura.sinkDeviceLabel', activeSinkDeviceLabel);
+  } else {
+    activeSinkDeviceLabel = activeEntry.name;
+  }
+
+  if (audioEngine) {
+    audioEngine.setOutputDevice(activeSinkDeviceId).catch(() => {});
   }
 
   // Icons SVG helper
@@ -2530,40 +2699,38 @@ async function loadConnectDevices() {
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
   };
 
-  renderedList.forEach(dev => {
-    const isCurrent = (dev.deviceId === activeSinkDeviceId) || (!activeSinkDeviceId && dev.isDefault);
-    const card = document.createElement('div');
-    card.className = `device-card ${isCurrent ? 'active' : ''}`;
-    card.innerHTML = `
-      <div class="device-icon-box">
-        ${getDeviceIconSvg(dev.iconType)}
-      </div>
-      <div class="device-info">
-        <div class="device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</div>
-        <div class="device-type">
-          ${dev.isBluetooth ? '<span style="color: var(--accent-cyan); font-weight: 600;">Bluetooth • </span>' : ''}
-          ${dev.isDAC ? '<span style="color: var(--accent-gold); font-weight: 600;">Hi-Res DAC • </span>' : ''}
-          ${escapeHtml(dev.type)}
+  if (container) {
+    renderedList.forEach(dev => {
+      const isCurrent = (dev.deviceId === activeSinkDeviceId) || (!activeSinkDeviceId && dev.isDefault);
+      const card = document.createElement('div');
+      card.className = `device-card ${isCurrent ? 'active' : ''}`;
+      card.innerHTML = `
+        <div class="device-icon-box">
+          ${getDeviceIconSvg(dev.iconType)}
         </div>
-      </div>
-      <button class="device-action-btn">${isCurrent ? 'ACTIVE ROUTE' : 'ROUTE OUTPUT'}</button>
-    `;
+        <div class="device-info">
+          <div class="device-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</div>
+          <div class="device-type">
+            ${dev.isBluetooth ? '<span style="color: var(--accent-cyan); font-weight: 600;">Bluetooth • </span>' : ''}
+            ${dev.isDAC ? '<span style="color: var(--accent-gold); font-weight: 600;">Hi-Res DAC • </span>' : ''}
+            ${escapeHtml(dev.type)}
+          </div>
+        </div>
+        <button class="device-action-btn">${isCurrent ? 'ACTIVE ROUTE' : 'ROUTE OUTPUT'}</button>
+      `;
 
-    card.dataset.deviceId = dev.deviceId;
-    card.addEventListener('click', () => {
-      selectPlaybackDevice(dev.deviceId, dev.name);
+      card.dataset.deviceId = dev.deviceId;
+      card.addEventListener('click', () => {
+        selectPlaybackDevice(dev.deviceId, dev.name, true);
+      });
+      container.appendChild(card);
     });
-    container.appendChild(card);
-  });
+  }
 
   cachedPlaybackDevices = renderedList;
 
   // 1. Populate Master Settings dropdown (#select-playback-device)
   const selectPlayback = document.getElementById('select-playback-device');
-  const settingsOutputChip = document.getElementById('settings-output-chip');
-  if (settingsOutputChip) {
-    settingsOutputChip.textContent = activeSinkDeviceLabel;
-  }
   if (selectPlayback) {
     selectPlayback.innerHTML = '';
     renderedList.forEach(dev => {
@@ -2577,19 +2744,15 @@ async function loadConnectDevices() {
     });
     selectPlayback.onchange = (e) => {
       const chosen = renderedList.find(d => d.deviceId === e.target.value);
-      selectPlaybackDevice(e.target.value, chosen ? chosen.name : '');
+      selectPlaybackDevice(e.target.value, chosen ? chosen.name : '', true);
     };
   }
 
-  // 2. Populate Bottom Player Bar Quick Output Popup (#quick-output-list)
-  const quickOutputLabel = document.getElementById('quick-output-label');
-  if (quickOutputLabel) {
-    quickOutputLabel.textContent = activeSinkDeviceLabel;
-    quickOutputLabel.title = `Playback Output: ${activeSinkDeviceLabel}`;
-  }
-  const quickList = document.getElementById('quick-output-list');
-  if (quickList) {
-    quickList.innerHTML = '';
+  // 2. Populate Bottom Player Bar (#quick-output-list) & Fullscreen (#fs-output-list) Popups
+  const populateQuickDeviceList = (listId, menuId) => {
+    const listEl = document.getElementById(listId);
+    if (!listEl) return;
+    listEl.innerHTML = '';
     renderedList.forEach(dev => {
       const isAct = dev.deviceId === activeSinkDeviceId || (!activeSinkDeviceId && dev.isDefault);
       const item = document.createElement('button');
@@ -2602,13 +2765,20 @@ async function loadConnectDevices() {
         <span class="quick-output-check" style="${isAct ? 'display:inline-block;' : 'display:none;'}">✓</span>
       `;
       item.addEventListener('click', () => {
-        selectPlaybackDevice(dev.deviceId, dev.name);
-        const menu = document.getElementById('quick-output-menu');
+        selectPlaybackDevice(dev.deviceId, dev.name, true);
+        const menu = document.getElementById(menuId);
         if (menu) menu.style.display = 'none';
       });
-      quickList.appendChild(item);
+      listEl.appendChild(item);
     });
-  }
+  };
+
+  populateQuickDeviceList('quick-output-list', 'quick-output-menu');
+  populateQuickDeviceList('fs-output-list', 'fs-output-menu');
+
+  updateLocalOutputLabels();
+  updateSignalPath();
+  broadcastRemoteState(true);
 }
 
 function initConnectUI() {
@@ -2644,27 +2814,61 @@ function initConnectUI() {
     });
   }
 
-  // Quick Playback Output Device Picker toggle
+  // Quick Playback Output Device Picker toggle (Master Player Bar + Fullscreen Now Playing)
   const btnQuickOutput = document.getElementById('btn-quick-output');
   const quickOutputMenu = document.getElementById('quick-output-menu');
+  const fsBtnOutput = document.getElementById('fs-btn-output');
+  const fsOutputMenu = document.getElementById('fs-output-menu');
+
   if (btnQuickOutput && quickOutputMenu) {
     btnQuickOutput.addEventListener('click', (e) => {
       e.stopPropagation();
       const isVisible = quickOutputMenu.style.display === 'block';
       quickOutputMenu.style.display = isVisible ? 'none' : 'block';
-    });
-    document.addEventListener('click', (e) => {
-      if (quickOutputMenu.style.display === 'block' && !quickOutputMenu.contains(e.target) && !btnQuickOutput.contains(e.target)) {
-        quickOutputMenu.style.display = 'none';
-      }
+      if (fsOutputMenu) fsOutputMenu.style.display = 'none';
+      if (!isVisible) loadConnectDevices();
     });
   }
 
-  // Hook nav-btn-connect to load devices & live network status on tab activation
+  if (fsBtnOutput && fsOutputMenu) {
+    fsBtnOutput.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = fsOutputMenu.style.display === 'block';
+      fsOutputMenu.style.display = isVisible ? 'none' : 'block';
+      if (quickOutputMenu) quickOutputMenu.style.display = 'none';
+      if (!isVisible) loadConnectDevices();
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (quickOutputMenu && quickOutputMenu.style.display === 'block' && !quickOutputMenu.contains(e.target) && (!btnQuickOutput || !btnQuickOutput.contains(e.target))) {
+      quickOutputMenu.style.display = 'none';
+    }
+    if (fsOutputMenu && fsOutputMenu.style.display === 'block' && !fsOutputMenu.contains(e.target) && (!fsBtnOutput || !fsBtnOutput.contains(e.target))) {
+      fsOutputMenu.style.display = 'none';
+    }
+  });
+
+  // Wire all Local Playback Destination Segmented Controls (Desktop PC / Remote Device / Both Synced)
+  document.querySelectorAll('[data-role="local-dest-group"] [data-dest]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dest = btn.getAttribute('data-dest');
+      if (dest) setPlaybackDestinationLocal(dest, true);
+    });
+  });
+
+  // Hook nav-btn-connect and nav-btn-dac to refresh devices & network status on tab activation
   const navBtnConnect = document.getElementById('nav-btn-connect');
   if (navBtnConnect) {
     navBtnConnect.addEventListener('click', () => {
       refreshRemoteNetworkInfo();
+      loadConnectDevices();
+    });
+  }
+  const navBtnDac = document.querySelector('[data-view="dac"]');
+  if (navBtnDac) {
+    navBtnDac.addEventListener('click', () => {
       loadConnectDevices();
     });
   }
@@ -2818,14 +3022,27 @@ function initConnectUI() {
     });
   }
 
+  let remoteDisconnectRestoreTimer = null;
   if (window.electronAPI && window.electronAPI.onRemoteClientsChanged) {
     window.electronAPI.onRemoteClientsChanged((info) => {
       if (clientsCount && info && info.count !== undefined) {
         clientsCount.textContent = `${info.count} Phone${info.count === 1 ? '' : 's'} Connected`;
       }
       if (info && info.count > 0) {
+        if (remoteDisconnectRestoreTimer) {
+          clearTimeout(remoteDisconnectRestoreTimer);
+          remoteDisconnectRestoreTimer = null;
+        }
         broadcastRemoteState(true);
         broadcastRemoteLibrary();
+      } else if (info && info.count === 0 && state.playbackDestination === 'phone') {
+        if (remoteDisconnectRestoreTimer) clearTimeout(remoteDisconnectRestoreTimer);
+        remoteDisconnectRestoreTimer = setTimeout(() => {
+          remoteDisconnectRestoreTimer = null;
+          if (state.playbackDestination === 'phone') {
+            setPlaybackDestinationLocal('desktop', true);
+          }
+        }, 4500);
       }
     });
   }
@@ -2856,6 +3073,11 @@ function initConnectUI() {
           audioEngine.setVolume(vol);
           volumeSlider.value = vol;
           setVolumeFill();
+          if (vol === 0) {
+            volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>';
+          } else {
+            volumeIcon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
+          }
           broadcastRemoteState(true);
         }
       } else if (cmd === 'set-stereo-mode') {
@@ -2927,10 +3149,11 @@ function initConnectUI() {
         }
         if (targetIndex >= 0 && targetIndex < state.filteredTracks.length) {
           playTrackIndex(targetIndex);
-          broadcastRemoteState(true);
         }
       } else if (cmd === 'rescan-library') {
         initApp();
+      } else if (cmd === 'rescan-output-devices') {
+        loadConnectDevices();
       } else if (cmd === 'set-theme') {
         if (action.themeId && typeof applyTheme === 'function') {
           applyTheme(action.themeId);
@@ -2956,36 +3179,16 @@ function initConnectUI() {
         }
       } else if (cmd === 'set-output-device') {
         if (action.deviceId !== undefined) {
-          selectPlaybackDevice(action.deviceId, action.name);
+          selectPlaybackDevice(action.deviceId, action.name, true);
         }
       } else if (cmd === 'set-playback-destination') {
-        const dest = action.destination || 'desktop';
-        state.playbackDestination = dest;
-        if (dest === 'phone') {
-          // Attenuate / mute desktop output so music streams strictly through phone
-          if (state.savedDesktopVolume === undefined && audioEngine.volume > 0) {
-            state.savedDesktopVolume = audioEngine.volume;
-          }
-          audioEngine.setVolume(0);
-          volumeSlider.value = 0;
-          setVolumeFill();
-        } else {
-          // Restore desktop sound for 'desktop' or 'both'
-          if (state.savedDesktopVolume !== undefined) {
-            audioEngine.setVolume(state.savedDesktopVolume);
-            volumeSlider.value = state.savedDesktopVolume;
-            setVolumeFill();
-            delete state.savedDesktopVolume;
-          } else if (audioEngine.volume === 0) {
-            audioEngine.setVolume(0.85);
-            volumeSlider.value = 0.85;
-            setVolumeFill();
-          }
-        }
-        broadcastRemoteState(true);
+        setPlaybackDestinationLocal(action.destination || 'desktop', true);
       }
     });
   }
+
+  // Sync local playback destination UI & gain mute state
+  setPlaybackDestinationLocal(state.playbackDestination || 'desktop', false);
 
   // Broadcast initial state and full library so remote server is immediately populated
   broadcastRemoteState(true);

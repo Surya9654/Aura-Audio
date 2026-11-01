@@ -961,6 +961,68 @@ img.track-thumb { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
   color: var(--accent-gold);
 }
 
+.quick-dest-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quick-dest-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.quick-dest-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.quick-dest-btn.active {
+  background: var(--accent-alpha20);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  font-weight: 700;
+  box-shadow: 0 2px 8px var(--accent-gold-glow-subtle);
+}
+
+.local-dest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.local-dest-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.local-dest-selector {
+  min-width: 280px;
+}
+
 /* ==========================================================================
    9. Audiophile Library Search Bar & Match Highlighting
    ========================================================================== */
