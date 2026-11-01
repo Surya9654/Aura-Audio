@@ -1015,12 +1015,38 @@
     });
   }
 
+  // Pre-allocated blob descriptors to eliminate per-frame heap allocations at 60 FPS
+  const meshBlobs = [
+    { c: null, x: 0, y: 0, r: 0, a: 0 },
+    { c: null, x: 0, y: 0, r: 0, a: 0 },
+    { c: null, x: 0, y: 0, r: 0, a: 0 },
+    { c: null, x: 0, y: 0, r: 0, a: 0 },
+    { c: null, x: 0, y: 0, r: 0, a: 0 }
+  ];
+  let meshLastRenderAt = 0;
+
   function stepLivingMesh(now) {
     if (!meshCtx || document.hidden) {
       meshLastFrameTime = now;
       return;
     }
-    const dt = Math.min(0.08, Math.max(0.004, (now - meshLastFrameTime) / 1000));
+
+    // Adaptive Frame Pacing: 60 FPS when playing or crossfading palette; 12 FPS (~83ms) when idle
+    let maxColorDelta = 0;
+    for (let i = 0; i < 4; i++) {
+      const d =
+        Math.abs(meshTargetColors[i][0] - meshCurrentColors[i][0]) +
+        Math.abs(meshTargetColors[i][1] - meshCurrentColors[i][1]) +
+        Math.abs(meshTargetColors[i][2] - meshCurrentColors[i][2]);
+      if (d > maxColorDelta) maxColorDelta = d;
+    }
+    const isIdle = !state.isPlaying && meshSmoothSubBass < 0.004 && maxColorDelta < 0.6;
+    if (isIdle && now - meshLastRenderAt < 83) {
+      return;
+    }
+    meshLastRenderAt = now;
+
+    const dt = Math.min(0.10, Math.max(0.004, (now - meshLastFrameTime) / 1000));
     meshLastFrameTime = now;
 
     const effectiveTarget = state.isPlaying ? meshTargetSubBass : 0;
@@ -1028,7 +1054,7 @@
     meshSmoothSubBass += (effectiveTarget - meshSmoothSubBass) * (1 - Math.exp(-dt * bassRate));
     const energy = Math.max(0, Math.min(1, meshSmoothSubBass));
 
-    meshPhase += dt * (0.65 + energy * 1.95);
+    meshPhase += dt * (isIdle ? 0.28 : 0.65 + energy * 1.95);
 
     const lerp = 1 - Math.exp(-dt * 3.2);
     for (let i = 0; i < 4; i++) {
@@ -1049,22 +1075,45 @@
     meshCtx.fillStyle = `rgb(${Math.round(6 + c0[0] * 0.30)}, ${Math.round(8 + c0[1] * 0.30)}, ${Math.round(13 + c0[2] * 0.34)})`;
     meshCtx.fillRect(0, 0, w, h);
 
-    const blobs = [
-      { c: c1, x: 0.50 + Math.sin(t * 0.37) * 0.28, y: 0.30 + Math.cos(t * 0.29) * 0.22, r: (0.64 + energy * 0.22) * w, a: 0.70 + energy * 0.20 },
-      { c: c2, x: 0.22 + Math.cos(t * 0.31 + 1.4) * 0.25, y: 0.65 + Math.sin(t * 0.23 + 0.8) * 0.24, r: (0.60 + energy * 0.18) * w, a: 0.60 + energy * 0.16 },
-      { c: c3, x: 0.78 + Math.sin(t * 0.27 + 2.6) * 0.24, y: 0.60 + Math.cos(t * 0.33 + 1.9) * 0.25, r: (0.56 + energy * 0.19) * w, a: 0.56 + energy * 0.16 },
-      { c: c0, x: 0.24 + Math.sin(t * 0.21 + 4.1) * 0.22, y: 0.22 + Math.cos(t * 0.25 + 3.2) * 0.20, r: (0.68 + energy * 0.14) * w, a: 0.64 + energy * 0.12 },
-      { c: c1, x: 0.50 + Math.cos(t * 0.43) * 0.10, y: 0.36 + Math.sin(t * 0.39) * 0.10, r: (0.36 + energy * 0.30) * w, a: 0.18 + energy * 0.38 }
-    ];
+    meshBlobs[0].c = c1;
+    meshBlobs[0].x = 0.50 + Math.sin(t * 0.37) * 0.28;
+    meshBlobs[0].y = 0.30 + Math.cos(t * 0.29) * 0.22;
+    meshBlobs[0].r = (0.68 + energy * 0.22) * w;
+    meshBlobs[0].a = 0.72 + energy * 0.20;
+
+    meshBlobs[1].c = c2;
+    meshBlobs[1].x = 0.22 + Math.cos(t * 0.31 + 1.4) * 0.25;
+    meshBlobs[1].y = 0.65 + Math.sin(t * 0.23 + 0.8) * 0.24;
+    meshBlobs[1].r = (0.64 + energy * 0.18) * w;
+    meshBlobs[1].a = 0.62 + energy * 0.16;
+
+    meshBlobs[2].c = c3;
+    meshBlobs[2].x = 0.78 + Math.sin(t * 0.27 + 2.6) * 0.24;
+    meshBlobs[2].y = 0.60 + Math.cos(t * 0.33 + 1.9) * 0.25;
+    meshBlobs[2].r = (0.60 + energy * 0.19) * w;
+    meshBlobs[2].a = 0.58 + energy * 0.16;
+
+    meshBlobs[3].c = c0;
+    meshBlobs[3].x = 0.24 + Math.sin(t * 0.21 + 4.1) * 0.22;
+    meshBlobs[3].y = 0.22 + Math.cos(t * 0.25 + 3.2) * 0.20;
+    meshBlobs[3].r = (0.72 + energy * 0.14) * w;
+    meshBlobs[3].a = 0.64 + energy * 0.12;
+
+    meshBlobs[4].c = c1;
+    meshBlobs[4].x = 0.50 + Math.cos(t * 0.43) * 0.10;
+    meshBlobs[4].y = 0.36 + Math.sin(t * 0.39) * 0.10;
+    meshBlobs[4].r = (0.38 + energy * 0.30) * w;
+    meshBlobs[4].a = 0.20 + energy * 0.38;
 
     meshCtx.globalCompositeOperation = 'screen';
-    for (let i = 0; i < blobs.length; i++) {
-      const b = blobs[i];
+    for (let i = 0; i < meshBlobs.length; i++) {
+      const b = meshBlobs[i];
       const cx = b.x * w, cy = b.y * h;
       const r = Math.round(b.c[0]), g = Math.round(b.c[1]), bl = Math.round(b.c[2]);
       const grad = meshCtx.createRadialGradient(cx, cy, 0, cx, cy, b.r);
       grad.addColorStop(0, `rgba(${r}, ${g}, ${bl}, ${Math.min(0.95, b.a).toFixed(3)})`);
-      grad.addColorStop(0.48, `rgba(${r}, ${g}, ${bl}, ${(b.a * 0.45).toFixed(3)})`);
+      grad.addColorStop(0.35, `rgba(${r}, ${g}, ${bl}, ${(b.a * 0.62).toFixed(3)})`);
+      grad.addColorStop(0.70, `rgba(${r}, ${g}, ${bl}, ${(b.a * 0.22).toFixed(3)})`);
       grad.addColorStop(1, `rgba(${r}, ${g}, ${bl}, 0)`);
       meshCtx.fillStyle = grad;
       meshCtx.fillRect(0, 0, w, h);
@@ -1079,11 +1128,14 @@
     }
   }
 
-  // 60 FPS Scrubber & Living Mesh animation loop
+  // 60 FPS Scrubber & Adaptive Living Mesh animation loop
   function startProgressLoop(now) {
-    updateProgressUI();
-    stepLivingMesh(now || performance.now());
     requestAnimationFrame(startProgressLoop);
+    if (document.hidden) return;
+    if (state.isPlaying || scrubbing) {
+      updateProgressUI();
+    }
+    stepLivingMesh(now || performance.now());
   }
 
   // 1. Play / Pause

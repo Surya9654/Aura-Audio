@@ -224,6 +224,10 @@ input:checked:active + .slider-switch:before {
   border-radius: var(--radius-md);
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28);
   transition: border-color 0.25s var(--ease-out), background 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  isolation: isolate;
 }
 
 .setting-row:hover {
@@ -619,6 +623,8 @@ img.track-thumb { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 .signal-path h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 14px; }
@@ -1139,12 +1145,18 @@ img.track-thumb { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
   align-items: center;
   gap: 32px;
   background: var(--bg-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   padding: 32px;
   position: relative;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  isolation: isolate;
 }
 
 .connect-remote-card::before {

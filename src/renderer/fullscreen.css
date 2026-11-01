@@ -28,6 +28,10 @@
   inset: 0;
   background: radial-gradient(circle at 50% 40%, #1a2030 0%, #07090e 75%);
   overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  contain: strict;
 }
 .fs-backdrop .living-mesh-canvas {
   width: 100%;
@@ -208,6 +212,8 @@
   flex-direction: column;
   gap: 18px;
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 
@@ -381,6 +387,10 @@
   background: radial-gradient(circle at 50% 30%, #1a2030 0%, #07090e 75%);
   overflow: hidden;
   pointer-events: none;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  contain: strict;
 }
 
 .ls-backdrop .living-mesh-canvas {
@@ -492,6 +502,8 @@
   flex-direction: column;
   gap: 8px;
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 

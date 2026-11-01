@@ -25,10 +25,12 @@ function writeEngineSettings(patch) {
   return next;
 }
 
-// Force GPU hardware acceleration and smooth scrolling/rendering
+// Force GPU hardware acceleration, zero-copy tile uploads, and out-of-process 2D canvas rasterization
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
 app.commandLine.appendSwitch('ignore-gpu-blocklist'); // Forces GPU acceleration even on older integrated graphics (Intel/AMD)
+app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization');
 
 // Best-effort WASAPI exclusive mode: Chromium opens the output endpoint exclusively on its
 // low-latency path, bypassing the Windows shared-mode mixer (and its resampling / volume curve)
@@ -136,7 +138,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false
+      webSecurity: false,
+      spellcheck: false,
+      backgroundThrottling: true
     },
     show: false
   });
@@ -521,6 +525,10 @@ ipcMain.handle('get-connected-devices', async () => {
   return await getWindowsAudioEndpointsAndBluetooth();
 });
 
+ipcMain.handle('get-gpu-status', () => {
+  return app.getGPUFeatureStatus();
+});
+
 // Strictly single-instance: prevents duplicate processes that cause overlapping audio playback
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -537,6 +545,8 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
+    const gpu = app.getGPUFeatureStatus();
+    console.log(`[Aura 3.2 GPU Engine] Rasterization: ${gpu.gpu_rasterization} | Zero-Copy: ${gpu.rasterization} | Canvas OOP: ${gpu.canvas_oop_rasterization} | Compositing: ${gpu.gpu_compositing}`);
     await startStreamingServer();
     createWindow();
     widgetBridge.init(mainWindow);

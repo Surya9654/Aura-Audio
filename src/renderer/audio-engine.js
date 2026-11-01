@@ -18,9 +18,13 @@ export class HighResAudioEngine {
     this.eqNodes = [];
     this.analyserNode = null;
     this.subBassAnalyser = null;
-    this.subBassBins = null;
+    this.subBassBins = new Uint8Array(64);
     this.subBassSmooth = 0;
     this.lastSubBassTime = 0;
+    this.lastSubBassSampleMs = 0;
+    this.dynamicsBuffer = new Float32Array(512);
+    this.lastDynamicsSampleMs = 0;
+    this.cachedDynamics = { peak: 0, rms: 0, crestFactorDb: 0, dynamicRating: 'IDLE' };
     this.crossfeedNode = null;
     this.crossfeed = null;
     this.crossfeedEnabled = false;
@@ -49,6 +53,7 @@ export class HighResAudioEngine {
     this.noiseGateRelease = 0.090; // 90ms
     this.gateGainNode = null;
     this.gateAnalyserNode = null;
+    this.gatePcmBuffer = new Float32Array(512);
     this.gateLoopId = null;
     this.gateState = 'open';
     this.sampleRate = 44100;
@@ -479,6 +484,9 @@ export class HighResAudioEngine {
     try {
       await this.audioElement.play();
       this.isPlaying = true;
+      if (this.noiseGateEnabled && !this.gateLoopId) {
+        this.startNoiseGateMonitoring();
+      }
     } catch (e) {
       console.error('Playback error:', e);
     }
@@ -487,6 +495,10 @@ export class HighResAudioEngine {
   pause() {
     this.audioElement.pause();
     this.isPlaying = false;
+    if (this.noiseGateEnabled && this.gateGainNode && this.audioContext && this.gateState !== 'closed') {
+      this.gateGainNode.gain.setTargetAtTime(0.0, this.audioContext.currentTime, 0.04);
+      this.gateState = 'closed';
+    }
   }
 
   seek(seconds) {
@@ -594,54 +606,63 @@ export class HighResAudioEngine {
   }
 
   startNoiseGateMonitoring() {
-    if (this.gateLoopId) cancelAnimationFrame(this.gateLoopId);
-    const pcmData = new Float32Array(512);
+    if (this.gateLoopId) {
+      cancelAnimationFrame(this.gateLoopId);
+      this.gateLoopId = null;
+    }
+    const pcmData = this.gatePcmBuffer;
 
     const checkLevel = () => {
-      if (this.audioContext && this.gateAnalyserNode && this.gateGainNode) {
-        if (!this.noiseGateEnabled) {
-          // Gate disabled: hold at unity gain (1.0)
-          if (Math.abs(this.gateGainNode.gain.value - 1.0) > 0.001) {
-            this.gateGainNode.gain.setTargetAtTime(1.0, this.audioContext.currentTime, 0.01);
-          }
+      this.gateLoopId = null;
+      if (!this.audioContext || !this.gateAnalyserNode || !this.gateGainNode) return;
+
+      if (!this.noiseGateEnabled) {
+        if (this.gateState !== 'open') {
+          this.gateGainNode.gain.setTargetAtTime(1.0, this.audioContext.currentTime, 0.01);
           this.gateState = 'open';
-        } else if (!this.isPlaying) {
-          // Playback paused or stopped: drop to absolute zero (-infinity dB)
+        }
+        return; // Sleep RAF loop completely while gate is disabled
+      }
+
+      if (!this.isPlaying) {
+        if (this.gateState !== 'closed') {
           this.gateGainNode.gain.setTargetAtTime(0.0, this.audioContext.currentTime, 0.04);
           this.gateState = 'closed';
-        } else {
-          // Calculate peak & RMS energy in current frame (32-bit float buffers)
-          this.gateAnalyserNode.getFloatTimeDomainData(pcmData);
-          let sumSquares = 0;
-          let peak = 0;
-          for (let i = 0; i < pcmData.length; i++) {
-            const v = Math.abs(pcmData[i]);
-            if (v > peak) peak = v;
-            sumSquares += v * v;
-          }
-          const rms = Math.sqrt(sumSquares / pcmData.length);
-          const currentDb = 20 * Math.log10(Math.max(peak, rms, 1e-7));
-
-          // Hysteresis: open at threshold + 2dB, close at threshold - 3dB to eliminate chatter
-          const openThreshold = this.noiseGateThreshold + 2;
-          const closeThreshold = this.noiseGateThreshold - 3;
-          const now = this.audioContext.currentTime;
-
-          if (currentDb >= openThreshold) {
-            // Signal present: open gate rapidly (5ms attack)
-            this.gateGainNode.gain.setTargetAtTime(1.0, now, this.noiseGateAttack);
-            this.gateState = 'open';
-          } else if (currentDb < closeThreshold) {
-            // Silence / inter-track gap / quiet passage: drop to digital zero (90ms release)
-            this.gateGainNode.gain.setTargetAtTime(0.0, now, this.noiseGateRelease);
-            this.gateState = 'closed';
-          }
         }
+        return; // Sleep RAF loop during idle/pause; play() wakes it immediately
       }
+
+      // Calculate peak & RMS energy in current frame (pre-allocated 32-bit float buffer)
+      this.gateAnalyserNode.getFloatTimeDomainData(pcmData);
+      let sumSquares = 0;
+      let peak = 0;
+      for (let i = 0; i < pcmData.length; i++) {
+        const v = Math.abs(pcmData[i]);
+        if (v > peak) peak = v;
+        sumSquares += v * v;
+      }
+      const rms = Math.sqrt(sumSquares / pcmData.length);
+      const currentDb = 20 * Math.log10(Math.max(peak, rms, 1e-7));
+
+      // Hysteresis: open at threshold + 2dB, close at threshold - 3dB; schedule AudioParam only on state transitions
+      const openThreshold = this.noiseGateThreshold + 2;
+      const closeThreshold = this.noiseGateThreshold - 3;
+      const now = this.audioContext.currentTime;
+
+      if (currentDb >= openThreshold && this.gateState !== 'open') {
+        this.gateGainNode.gain.setTargetAtTime(1.0, now, this.noiseGateAttack);
+        this.gateState = 'open';
+      } else if (currentDb < closeThreshold && this.gateState !== 'closed') {
+        this.gateGainNode.gain.setTargetAtTime(0.0, now, this.noiseGateRelease);
+        this.gateState = 'closed';
+      }
+
       this.gateLoopId = requestAnimationFrame(checkLevel);
     };
 
-    this.gateLoopId = requestAnimationFrame(checkLevel);
+    if (this.isPlaying && this.noiseGateEnabled) {
+      this.gateLoopId = requestAnimationFrame(checkLevel);
+    }
   }
 
   setSubsonicFilter(enabled) {
@@ -655,6 +676,9 @@ export class HighResAudioEngine {
     this.rewire();
     if (!this.noiseGateEnabled && this.gateGainNode && this.audioContext) {
       this.gateGainNode.gain.setTargetAtTime(1.0, this.audioContext.currentTime, 0.02);
+      this.gateState = 'open';
+    } else if (this.noiseGateEnabled && this.isPlaying && !this.gateLoopId) {
+      this.startNoiseGateMonitoring();
     }
   }
 
@@ -761,18 +785,26 @@ export class HighResAudioEngine {
 
   /**
    * Real-time Sub-Bass Energy (32–120 Hz) normalized 0..1 with asymmetric
-   * musical attack/release smoothing for Living Mesh backdrop modulation.
+   * musical attack/release smoothing and per-frame memoization (zero thread blocking / zero GC).
    */
   getSubBassEnergy() {
     const now = performance.now();
+    // Memoize within the current 60 FPS frame (~10ms window) so multiple callers share one FFT read
+    if (this.lastSubBassSampleMs > 0 && (now - this.lastSubBassSampleMs) < 10) {
+      return this.subBassSmooth;
+    }
+    this.lastSubBassSampleMs = now;
+
     const dt = this.lastSubBassTime > 0
       ? Math.min(0.1, Math.max(0.004, (now - this.lastSubBassTime) / 1000))
       : 0.016;
     this.lastSubBassTime = now;
 
     if (!this.subBassAnalyser || !this.audioContext || !this.isPlaying) {
-      this.subBassSmooth *= Math.exp(-dt * 5.5);
-      if (this.subBassSmooth < 0.002) this.subBassSmooth = 0;
+      if (this.subBassSmooth > 0) {
+        this.subBassSmooth *= Math.exp(-dt * 5.5);
+        if (this.subBassSmooth < 0.002) this.subBassSmooth = 0;
+      }
       return this.subBassSmooth;
     }
 
@@ -782,9 +814,10 @@ export class HighResAudioEngine {
 
     const needed = maxBin + 2;
     if (!this.subBassBins || this.subBassBins.length < needed) {
-      this.subBassBins = new Uint8Array(Math.max(48, needed));
+      this.subBassBins = new Uint8Array(Math.max(64, needed));
     }
 
+    // Partial bin readback: Web Audio copies only subBassBins.length bytes (~64 bytes instead of 2048)
     this.subBassAnalyser.getByteFrequencyData(this.subBassBins);
 
     let weightedSum = 0;
@@ -811,22 +844,33 @@ export class HighResAudioEngine {
     // Fast transient attack (~45ms), silky liquid release (~230ms)
     const rate = target > this.subBassSmooth ? 22.0 : 4.4;
     this.subBassSmooth += (target - this.subBassSmooth) * (1 - Math.exp(-dt * rate));
+    this.subBassSmooth = Math.max(0, Math.min(1, this.subBassSmooth));
 
-    return Math.max(0, Math.min(1, this.subBassSmooth));
+    return this.subBassSmooth;
   }
 
   /**
    * Real-Time Micro-Dynamics & Crest Factor Analysis
-   * Calculates instantaneous Peak, RMS, and Crest Factor (dB) to detect
-   * uncompressed dynamic acoustic peaks vs brick-walled loudness war compression.
+   * Pre-allocated Float32Array + per-frame memoization for zero-GC 60 FPS telemetry.
    */
   getDynamicsMetrics() {
     if (!this.analyserNode || !this.isPlaying) {
-      return { peak: 0, rms: 0, crestFactorDb: 0, dynamicRating: 'IDLE' };
+      this.cachedDynamics.peak = 0;
+      this.cachedDynamics.rms = 0;
+      this.cachedDynamics.crestFactorDb = 0;
+      this.cachedDynamics.dynamicRating = 'IDLE';
+      return this.cachedDynamics;
     }
 
-    if (!this.dynamicsBuffer) {
-      this.dynamicsBuffer = new Float32Array(this.analyserNode.fftSize || 512);
+    const now = performance.now();
+    if (this.lastDynamicsSampleMs > 0 && (now - this.lastDynamicsSampleMs) < 14) {
+      return this.cachedDynamics;
+    }
+    this.lastDynamicsSampleMs = now;
+
+    const fftLen = this.analyserNode.fftSize || 512;
+    if (!this.dynamicsBuffer || this.dynamicsBuffer.length !== fftLen) {
+      this.dynamicsBuffer = new Float32Array(fftLen);
     }
     this.analyserNode.getFloatTimeDomainData(this.dynamicsBuffer);
 
@@ -843,7 +887,11 @@ export class HighResAudioEngine {
     const rms = Math.sqrt(sumSquares / len);
 
     if (rms < 0.001 || peak < 0.002) {
-      return { peak: 0, rms: 0, crestFactorDb: 0, dynamicRating: 'SILENT' };
+      this.cachedDynamics.peak = 0;
+      this.cachedDynamics.rms = 0;
+      this.cachedDynamics.crestFactorDb = 0;
+      this.cachedDynamics.dynamicRating = 'SILENT';
+      return this.cachedDynamics;
     }
 
     // Crest Factor: ratio of peak amplitude to RMS
@@ -857,6 +905,10 @@ export class HighResAudioEngine {
       dynamicRating = 'COMPRESSED'; // Loudness war / brickwalled master
     }
 
-    return { peak, rms, crestFactorDb, dynamicRating };
+    this.cachedDynamics.peak = peak;
+    this.cachedDynamics.rms = rms;
+    this.cachedDynamics.crestFactorDb = crestFactorDb;
+    this.cachedDynamics.dynamicRating = dynamicRating;
+    return this.cachedDynamics;
   }
 }

@@ -254,8 +254,9 @@ export function extractPaletteFromImage(img, samplerCanvas) {
 }
 
 export class LivingMeshController {
-  constructor({ getSubBassEnergy, onPaletteChange } = {}) {
+  constructor({ getSubBassEnergy, isAudioPlaying, onPaletteChange } = {}) {
     this.getSubBassEnergy = typeof getSubBassEnergy === 'function' ? getSubBassEnergy : () => 0;
+    this.isAudioPlaying = typeof isAudioPlaying === 'function' ? isAudioPlaying : () => false;
     this.onPaletteChange = typeof onPaletteChange === 'function' ? onPaletteChange : null;
 
     this.samplerCanvas = document.createElement('canvas');
@@ -279,6 +280,9 @@ export class LivingMeshController {
     this.fsCurrentColors = clonePalette(initial);
     this.fsTargetColors = clonePalette(initial);
 
+    // Pre-allocated blob descriptors eliminate per-frame GC allocations at 60 FPS
+    this.blobs = Array.from({ length: 5 }, () => ({ color: null, x: 0, y: 0, r: 0, alpha: 0 }));
+
     this.fsCanvas = null;
     this.fsCtx = null;
     this.ambientCanvas = null;
@@ -294,7 +298,9 @@ export class LivingMeshController {
 
     this.phase = Math.random() * 100;
     this.lastTime = 0;
+    this.lastRenderTime = 0;
     this.rafId = null;
+    this._visibilityBound = false;
   }
 
   mount({ fsCanvas, ambientCanvas, lsCanvas, flsCanvas, fsPlayerEl, fsArtEl } = {}) {
@@ -467,6 +473,18 @@ export class LivingMeshController {
   start() {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.lastTime = performance.now();
+    this.lastRenderTime = 0;
+
+    if (!this._visibilityBound) {
+      this._visibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          this.lastTime = performance.now();
+          this.lastRenderTime = 0;
+          this.renderImmediateFrame();
+        }
+      });
+    }
 
     const tick = (now) => {
       this.rafId = requestAnimationFrame(tick);
@@ -475,13 +493,34 @@ export class LivingMeshController {
         return;
       }
 
-      const dt = Math.min(0.08, Math.max(0.004, (now - this.lastTime) / 1000));
-      this.lastTime = now;
-
+      const playing = !!this.isAudioPlaying();
       const energy = Math.max(0, Math.min(1, this.getSubBassEnergy() || 0));
 
-      // Noticeable Apple Music fluid drift at idle + energetic swell on sub-bass hits
-      this.phase += dt * (0.65 + energy * 1.95);
+      // Check if any palette channel is actively morphing (theme switch or track change)
+      let maxDelta = 0;
+      for (let i = 0; i < 4; i++) {
+        for (let ch = 0; ch < 3; ch++) {
+          const d1 = Math.abs(this.ambientTargetColors[i][ch] - this.ambientCurrentColors[i][ch]);
+          const d2 = Math.abs(this.fsTargetColors[i][ch] - this.fsCurrentColors[i][ch]);
+          if (d1 > maxDelta) maxDelta = d1;
+          if (d2 > maxDelta) maxDelta = d2;
+        }
+      }
+
+      // Adaptive Frame Pacing:
+      // - Active playback / sub-bass decay / color crossfade -> locked 60 FPS
+      // - Idle / paused & settled -> throttles safely to ~12 FPS (~83ms) cutting idle GPU load by ~80%
+      const isActive = playing || energy > 0.004 || maxDelta > 0.6;
+      if (!isActive && this.lastRenderTime > 0 && (now - this.lastRenderTime) < 83) {
+        return;
+      }
+
+      const dt = Math.min(0.12, Math.max(0.004, (now - this.lastTime) / 1000));
+      this.lastTime = now;
+      this.lastRenderTime = now;
+
+      // Fluid drift speed: gentle idle meditation (0.28x) vs energetic 60 FPS playback flow + sub-bass swell
+      this.phase += dt * ((playing ? 0.65 : 0.28) + energy * 1.95);
 
       const lerp = 1 - Math.exp(-dt * 3.8);
       for (let i = 0; i < 4; i++) {
@@ -536,47 +575,39 @@ export class LivingMeshController {
     ctx.fillStyle = `rgb(${baseR}, ${baseG}, ${baseB})`;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Five fluid radial color blobs moving on non-repeating Lissajous paths
-    // Soft multi-stop radial gradients produce ultra-smooth Apple Music mesh blending natively
+    // 2. Five fluid radial color blobs mutated in-place (zero per-frame heap allocations)
     const maxDim = Math.max(w, h);
-    const blobs = [
-      {
-        color: c1,
-        x: 0.65 + Math.sin(t * 0.41) * 0.28 + Math.cos(t * 0.21) * 0.08,
-        y: 0.26 + Math.cos(t * 0.33) * 0.24 + Math.sin(t * 0.19) * 0.07,
-        r: (0.68 + energy * 0.26) * maxDim,
-        alpha: (0.72 + energy * 0.22) * intensity
-      },
-      {
-        color: c2,
-        x: 0.20 + Math.cos(t * 0.35 + 1.4) * 0.26,
-        y: 0.74 + Math.sin(t * 0.27 + 0.8) * 0.24,
-        r: (0.64 + energy * 0.22) * maxDim,
-        alpha: (0.64 + energy * 0.20) * intensity
-      },
-      {
-        color: c3,
-        x: 0.82 + Math.sin(t * 0.29 + 2.6) * 0.24,
-        y: 0.68 + Math.cos(t * 0.37 + 1.9) * 0.26,
-        r: (0.58 + energy * 0.20) * maxDim,
-        alpha: (0.58 + energy * 0.18) * intensity
-      },
-      {
-        color: c0,
-        x: 0.28 + Math.sin(t * 0.23 + 4.1) * 0.22,
-        y: 0.24 + Math.cos(t * 0.31 + 3.2) * 0.20,
-        r: (0.56 + energy * 0.16) * maxDim,
-        alpha: (0.50 + energy * 0.16) * intensity
-      },
-      {
-        // Sub-bass reactive core bloom (32–120 Hz)
-        color: c1,
-        x: 0.50 + Math.cos(t * 0.47) * 0.14,
-        y: 0.44 + Math.sin(t * 0.43) * 0.14,
-        r: (0.38 + energy * 0.36) * maxDim,
-        alpha: (0.24 + energy * 0.46) * intensity
-      }
-    ];
+    const blobs = this.blobs;
+
+    blobs[0].color = c1;
+    blobs[0].x = 0.65 + Math.sin(t * 0.41) * 0.28 + Math.cos(t * 0.21) * 0.08;
+    blobs[0].y = 0.26 + Math.cos(t * 0.33) * 0.24 + Math.sin(t * 0.19) * 0.07;
+    blobs[0].r = (0.68 + energy * 0.26) * maxDim;
+    blobs[0].alpha = (0.72 + energy * 0.22) * intensity;
+
+    blobs[1].color = c2;
+    blobs[1].x = 0.20 + Math.cos(t * 0.35 + 1.4) * 0.26;
+    blobs[1].y = 0.74 + Math.sin(t * 0.27 + 0.8) * 0.24;
+    blobs[1].r = (0.64 + energy * 0.22) * maxDim;
+    blobs[1].alpha = (0.64 + energy * 0.20) * intensity;
+
+    blobs[2].color = c3;
+    blobs[2].x = 0.82 + Math.sin(t * 0.29 + 2.6) * 0.24;
+    blobs[2].y = 0.68 + Math.cos(t * 0.37 + 1.9) * 0.26;
+    blobs[2].r = (0.58 + energy * 0.20) * maxDim;
+    blobs[2].alpha = (0.58 + energy * 0.18) * intensity;
+
+    blobs[3].color = c0;
+    blobs[3].x = 0.28 + Math.sin(t * 0.23 + 4.1) * 0.22;
+    blobs[3].y = 0.24 + Math.cos(t * 0.31 + 3.2) * 0.20;
+    blobs[3].r = (0.56 + energy * 0.16) * maxDim;
+    blobs[3].alpha = (0.50 + energy * 0.16) * intensity;
+
+    blobs[4].color = c1;
+    blobs[4].x = 0.50 + Math.cos(t * 0.47) * 0.14;
+    blobs[4].y = 0.44 + Math.sin(t * 0.43) * 0.14;
+    blobs[4].r = (0.38 + energy * 0.36) * maxDim;
+    blobs[4].alpha = (0.24 + energy * 0.46) * intensity;
 
     ctx.globalCompositeOperation = 'screen';
     for (let i = 0; i < blobs.length; i++) {

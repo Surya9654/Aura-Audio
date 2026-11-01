@@ -21,5 +21,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRemoteClientsChanged: (callback) => ipcRenderer.on('remote-clients-changed', (_, info) => callback(info)),
   onRemoteServerReady: (callback) => ipcRenderer.on('remote-server-ready', (_, info) => callback(info)),
   sendRemoteLibrary: (tracks) => ipcRenderer.send('remote-update-library', tracks),
-  getConnectedDevices: () => ipcRenderer.invoke('get-connected-devices')
+  getConnectedDevices: () => ipcRenderer.invoke('get-connected-devices'),
+  getGpuStatus: () => ipcRenderer.invoke('get-gpu-status')
 });

@@ -70,6 +70,7 @@ const state = {
 const audioEngine = new HighResAudioEngine();
 const livingMesh = new LivingMeshController({
   getSubBassEnergy: () => audioEngine.getSubBassEnergy(),
+  isAudioPlaying: () => audioEngine.isPlaying,
   onPaletteChange: () => {
     if (typeof broadcastRemoteState === 'function') {
       broadcastRemoteState(true);
@@ -867,69 +868,131 @@ const drMeterBadge = document.getElementById('dr-meter-badge');
 const fsDrMeterVal = document.getElementById('fs-dr-meter-val');
 const fsDrMeterDot = document.getElementById('fs-dr-meter-dot');
 const fsDrMeterBadge = document.getElementById('fs-dr-meter-badge');
+const fsCurrentTimeEl = document.getElementById('fs-current');
+const fsTotalTimeEl = document.getElementById('fs-total');
 
-(function progressLoop() {
-  const el = audioEngine.audioElement;
-  let pct = 0;
-  if (el && el.duration > 0) {
-    pct = (el.currentTime / el.duration) * 100;
-    if (!scrubbing) {
-      scrubber.value = pct;
-      scrubber.style.setProperty('--p', `${pct}%`);
-      currentTimeEl.textContent = formatDuration(el.currentTime);
-      totalTimeEl.textContent = formatDuration(el.duration);
-      syncLockscreenScrubber(el.currentTime, el.duration);
+(function initUnifiedProgressLoop() {
+  let lastPctKey = '';
+  let lastCurText = '';
+  let lastTotText = '';
+  let lastFsPctKey = '';
+  let lastFsCurText = '';
+  let lastFsTotText = '';
+  let lastDrKey = '';
+  let lastFsDrKey = '';
+  let lastSyncSec = -1;
+
+  function progressLoop() {
+    requestAnimationFrame(progressLoop);
+    if (document.hidden) return;
+
+    const el = audioEngine.audioElement;
+    const isFsOpen = !!(fsPlayer && fsPlayer.classList.contains('open'));
+    let pct = 0;
+
+    if (el && el.duration > 0) {
+      pct = (el.currentTime / el.duration) * 100;
+      const pctKey = pct.toFixed(2);
+      const curText = formatDuration(el.currentTime);
+      const totText = formatDuration(el.duration);
+
+      if (!scrubbing) {
+        if (pctKey !== lastPctKey) {
+          lastPctKey = pctKey;
+          scrubber.value = pct;
+          scrubber.style.setProperty('--p', `${pctKey}%`);
+        }
+        if (curText !== lastCurText) {
+          lastCurText = curText;
+          currentTimeEl.textContent = curText;
+        }
+        if (totText !== lastTotText) {
+          lastTotText = totText;
+          totalTimeEl.textContent = totText;
+        }
+        const secBucket = Math.floor(el.currentTime * 4);
+        if (audioEngine.isPlaying || secBucket !== lastSyncSec) {
+          lastSyncSec = secBucket;
+          syncLockscreenScrubber(el.currentTime, el.duration);
+        }
+      }
+
+      if (isFsOpen && !fsScrubbing && fsScrubber) {
+        if (pctKey !== lastFsPctKey) {
+          lastFsPctKey = pctKey;
+          fsScrubber.value = pct;
+          fsScrubber.style.setProperty('--p', `${pctKey}%`);
+        }
+        if (fsCurrentTimeEl && curText !== lastFsCurText) {
+          lastFsCurText = curText;
+          fsCurrentTimeEl.textContent = curText;
+        }
+        if (fsTotalTimeEl && totText !== lastFsTotText) {
+          lastFsTotText = totText;
+          fsTotalTimeEl.textContent = totText;
+        }
+      }
     }
-  }
 
-  // Periodic heartbeat sync to mobile remote over Wi-Fi (lightweight tick)
-  if (typeof broadcastRemoteState === 'function' && el && el.duration > 0 && audioEngine.isPlaying) {
-    broadcastRemoteState(false, true);
-  }
-
-  // Micro-Dynamics & Crest Factor Heatmap Timeline Processing (Switched off as of now)
-  const isFsOpen = fsPlayer && fsPlayer.classList.contains('open');
-  const ENABLE_HEATMAP = false;
-  const metrics = audioEngine.getDynamicsMetrics();
-  if (ENABLE_HEATMAP) {
-    dynamicsHeatmap.recordProgress(pct, metrics);
-
-    const activeTheme = MASTER_THEMES.find(t => t.id === state.activeThemeId);
-    const themeAccent = activeTheme ? activeTheme.swatchColor : '#e5b95f';
-
-    if (scrubberHeatmapCanvas) {
-      dynamicsHeatmap.render(scrubberHeatmapCanvas, pct, metrics, themeAccent);
+    // Periodic heartbeat sync to mobile remote over Wi-Fi (lightweight tick)
+    if (typeof broadcastRemoteState === 'function' && el && el.duration > 0 && audioEngine.isPlaying) {
+      broadcastRemoteState(false, true);
     }
 
-    if (isFsOpen && fsScrubberHeatmapCanvas) {
-      dynamicsHeatmap.render(fsScrubberHeatmapCanvas, pct, metrics, themeAccent);
+    // Skip DSP readback and badge DOM updates when paused once settled
+    if (!audioEngine.isPlaying && lastDrKey !== '' && (!isFsOpen || lastFsDrKey === lastDrKey)) {
+      return;
     }
-  }
 
-  // Update Dynamic Range Badges (DR XX dB • Dynamic/Compressed)
-  const currentDr = metrics.crestFactorDb > 0 ? metrics.crestFactorDb : dynamicsHeatmap.smoothCrestFactor;
-  const drText = `DR ${currentDr.toFixed(1)} dB`;
-  const rating = metrics.dynamicRating || 'BALANCED';
+    // Micro-Dynamics & Crest Factor Heatmap Timeline Processing (Switched off as of now)
+    const ENABLE_HEATMAP = false;
+    const metrics = audioEngine.getDynamicsMetrics();
+    if (ENABLE_HEATMAP) {
+      dynamicsHeatmap.recordProgress(pct, metrics);
 
-  const updateBadge = (valEl, dotEl, badgeEl) => {
-    if (!valEl) return;
-    valEl.textContent = drText;
-    if (dotEl) {
-      dotEl.className = `dr-meter-dot ${rating === 'DYNAMIC' ? 'dynamic' : (rating === 'COMPRESSED' ? 'compressed' : 'balanced')}`;
+      const activeTheme = MASTER_THEMES.find(t => t.id === state.activeThemeId);
+      const themeAccent = activeTheme ? activeTheme.swatchColor : '#e5b95f';
+
+      if (scrubberHeatmapCanvas) {
+        dynamicsHeatmap.render(scrubberHeatmapCanvas, pct, metrics, themeAccent);
+      }
+
+      if (isFsOpen && fsScrubberHeatmapCanvas) {
+        dynamicsHeatmap.render(fsScrubberHeatmapCanvas, pct, metrics, themeAccent);
+      }
     }
-    if (badgeEl) {
-      badgeEl.classList.toggle('compressed', rating === 'COMPRESSED');
-      badgeEl.title = rating === 'DYNAMIC'
-        ? `Crest Factor: ${currentDr.toFixed(1)} dB — High uncompressed acoustic dynamic range & punchy transients.`
-        : (rating === 'COMPRESSED'
-            ? `Crest Factor: ${currentDr.toFixed(1)} dB — Compressed / limited loudness-war master (peaks near RMS floor).`
-            : `Crest Factor: ${currentDr.toFixed(1)} dB — Balanced studio master dynamics.`);
-    }
-  };
 
-  updateBadge(drMeterVal, drMeterDot, drMeterBadge);
-  if (isFsOpen) {
-    updateBadge(fsDrMeterVal, fsDrMeterDot, fsDrMeterBadge);
+    // Update Dynamic Range Badges (DR XX dB • Dynamic/Compressed) only when value/rating changes
+    const currentDr = metrics.crestFactorDb > 0 ? metrics.crestFactorDb : dynamicsHeatmap.smoothCrestFactor;
+    const drFixed = currentDr.toFixed(1);
+    const drText = `DR ${drFixed} dB`;
+    const rating = metrics.dynamicRating || 'BALANCED';
+    const stateKey = `${drFixed}|${rating}`;
+
+    const updateBadge = (valEl, dotEl, badgeEl) => {
+      if (!valEl) return;
+      valEl.textContent = drText;
+      if (dotEl) {
+        dotEl.className = `dr-meter-dot ${rating === 'DYNAMIC' ? 'dynamic' : (rating === 'COMPRESSED' ? 'compressed' : 'balanced')}`;
+      }
+      if (badgeEl) {
+        badgeEl.classList.toggle('compressed', rating === 'COMPRESSED');
+        badgeEl.title = rating === 'DYNAMIC'
+          ? `Crest Factor: ${drFixed} dB — High uncompressed acoustic dynamic range & punchy transients.`
+          : (rating === 'COMPRESSED'
+              ? `Crest Factor: ${drFixed} dB — Compressed / limited loudness-war master (peaks near RMS floor).`
+              : `Crest Factor: ${drFixed} dB — Balanced studio master dynamics.`);
+      }
+    };
+
+    if (stateKey !== lastDrKey) {
+      lastDrKey = stateKey;
+      updateBadge(drMeterVal, drMeterDot, drMeterBadge);
+    }
+    if (isFsOpen && stateKey !== lastFsDrKey) {
+      lastFsDrKey = stateKey;
+      updateBadge(fsDrMeterVal, fsDrMeterDot, fsDrMeterBadge);
+    }
   }
 
   requestAnimationFrame(progressLoop);
@@ -1071,48 +1134,85 @@ document.getElementById('btn-rescan-hardware').addEventListener('click', async (
   updateSignalPath();
 });
 
-// 6. Visualizer Canvas (Audio Spectrum)
+// 6. Visualizer Canvas (Audio Spectrum — zero layout thrash & idle-gated)
 function startVisualizer() {
   const canvas = visualizerCanvas;
   const ctx = canvas.getContext('2d');
+  const viewStudioEl = document.getElementById('view-studio');
   const bufferLength = 128;
   const dataArray = new Uint8Array(bufferLength);
+  let cachedGrad = null;
+  let cachedGradKey = '';
+  let visualizerCleared = false;
 
   function resize() {
+    if (!canvas || !canvas.parentElement) return;
     const dpr = window.devicePixelRatio || 1;
     const w = Math.floor(canvas.parentElement.clientWidth * dpr);
     const h = Math.floor(canvas.parentElement.clientHeight * dpr);
     if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
       canvas.width = w;
       canvas.height = h;
+      cachedGrad = null;
+      visualizerCleared = false;
     }
   }
   window.addEventListener('resize', resize);
-  if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas.parentElement);
+  if (window.ResizeObserver && canvas.parentElement) {
+    new ResizeObserver(resize).observe(canvas.parentElement);
+  }
   resize();
 
   function render() {
     requestAnimationFrame(render);
-    // The Studio view is hidden most of the time (0×0); size lazily once it becomes visible
-    resize();
-    if (canvas.width === 0 || canvas.height === 0) return;
+    // Skip completely when window is hidden or Studio view is not active (zero layout/FFT/GPU cost)
+    if (document.hidden || (viewStudioEl && !viewStudioEl.classList.contains('active'))) {
+      return;
+    }
+    if (canvas.width === 0 || canvas.height === 0) {
+      resize();
+      if (canvas.width === 0 || canvas.height === 0) return;
+    }
+
+    if (!audioEngine.isPlaying && visualizerCleared) {
+      return;
+    }
+
     audioEngine.getFrequencyData(dataArray);
 
     const width = canvas.width;
     const height = canvas.height;
+
+    if (!audioEngine.isPlaying) {
+      let maxVal = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        if (dataArray[i] > maxVal) maxVal = dataArray[i];
+      }
+      if (maxVal === 0) {
+        ctx.clearRect(0, 0, width, height);
+        visualizerCleared = true;
+        return;
+      }
+    } else {
+      visualizerCleared = false;
+    }
 
     ctx.clearRect(0, 0, width, height);
 
     const barWidth = (width / bufferLength) * 1.5;
     let x = 0;
 
-    // Gradient with active Master Edition theme audiophile aura (built once per frame)
-    const activeThemeObj = MASTER_THEMES.find(t => t.id === state.activeThemeId) || MASTER_THEMES[0];
-    const grad = ctx.createLinearGradient(0, height, 0, 0);
-    grad.addColorStop(0, activeThemeObj.spectrum[0]);
-    grad.addColorStop(0.5, activeThemeObj.spectrum[1]);
-    grad.addColorStop(1, activeThemeObj.spectrum[2]);
-    ctx.fillStyle = grad;
+    // Cache gradient per (height, activeThemeId) to eliminate per-frame gradient allocations
+    const gradKey = `${height}|${state.activeThemeId}`;
+    if (!cachedGrad || cachedGradKey !== gradKey) {
+      const activeThemeObj = MASTER_THEMES.find(t => t.id === state.activeThemeId) || MASTER_THEMES[0];
+      cachedGrad = ctx.createLinearGradient(0, height, 0, 0);
+      cachedGrad.addColorStop(0, activeThemeObj.spectrum[0]);
+      cachedGrad.addColorStop(0.5, activeThemeObj.spectrum[1]);
+      cachedGrad.addColorStop(1, activeThemeObj.spectrum[2]);
+      cachedGradKey = gradKey;
+    }
+    ctx.fillStyle = cachedGrad;
 
     for (let i = 0; i < bufferLength; i++) {
       const barHeight = (dataArray[i] / 255) * height;
@@ -1743,18 +1843,6 @@ fsScrubber.addEventListener('input', (e) => {
     audioEngine.seek((e.target.value / 100) * el.duration);
   }
 });
-
-(function fsProgressLoop() {
-  const el = audioEngine.audioElement;
-  if (fsPlayer.classList.contains('open') && !fsScrubbing && el && el.duration > 0) {
-    const pct = (el.currentTime / el.duration) * 100;
-    fsScrubber.value = pct;
-    fsScrubber.style.setProperty('--p', `${pct}%`);
-    document.getElementById('fs-current').textContent = formatDuration(el.currentTime);
-    document.getElementById('fs-total').textContent = formatDuration(el.duration);
-  }
-  requestAnimationFrame(fsProgressLoop);
-})();
 
 // 10. Headphone crossfeed
 const toggleCrossfeed = document.getElementById('toggle-crossfeed');

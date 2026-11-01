@@ -1,6 +1,6 @@
-# Aura 3.1 — Ultra-Premium Audiophile Lossless Workstation
+# Aura 3.2 — Ultra-Premium Audiophile Lossless Workstation
 
-**Aura 3.1** is an Apple-inspired desktop lossless audio workstation built specifically for FLAC, high-resolution WAV/AIFF, adaptive Wi-Fi remote control, and bit-perfect DAC playback.
+**Aura 3.2** is an Apple-inspired desktop lossless audio workstation built specifically for FLAC, high-resolution WAV/AIFF, GPU-accelerated 60 FPS Living Mesh visuals, adaptive Wi-Fi remote control, and bit-perfect DAC playback.
 
 ---
 
@@ -77,6 +77,18 @@ Calibrated acoustic compensation curves designed according to Harman Target 2019
 ---
 
 ## 📝 Changelog & Evolution
+
+### Version 3.2.0 (Aura 3.2 — 60 FPS GPU Compositor Architecture, Adaptive Living Mesh, +10 dB Preamp & Optical Blur Transitions)
+- **GPU-Accelerated Compositor & Zero-Repaint Glassmorphism**:
+  - Configured Chromium pre-ready GPU switches (`enable-gpu-rasterization`, `enable-zero-copy`, `enable-accelerated-2d-canvas`, `ignore-gpu-blocklist`, `CanvasOopRasterization`) with runtime `getGPUFeatureStatus()` IPC telemetry.
+  - Promoted all heavy `backdrop-filter` glass layers and animated backdrop containers (`.ambient-glow`, `.fs-backdrop`, `.ls-backdrop`, `.titlebar`, `.sidebar`, `.player-bar`, `.fs-glass-panel`, `.ls-glass-panel`, `.setting-row`, `.signal-path`, `.connect-remote-card`) onto dedicated GPU compositor planes (`transform: translateZ(0); will-change: transform, opacity; backface-visibility: hidden; isolation: isolate;`).
+- **Zero-GC Sub-Bass Web Audio DSP & Adaptive 60 FPS / 12 FPS Living Mesh**:
+  - Pre-allocated `Uint8Array(64)` partial FFT readback buffer (`32–120 Hz` bins only — 64 bytes instead of 2,048 bytes) and `Float32Array(512)` dynamics buffers with intra-frame memoization for zero garbage-collector churn.
+  - Transition-driven Black-Background Noise Gate suspends `AudioParam.setTargetAtTime()` scheduling and pauses its `requestAnimationFrame` loop completely when idle.
+  - Adaptive Living Mesh frame pacing runs at locked **60 FPS** during playback, sub-bass decay, or palette crossfades, and automatically throttles to **12 FPS** (`~83 ms`) when idle (`0 FPS` when minimized/occluded) across Desktop and Mobile Remote.
+- **Optical Blur-Out → Blur-In Track Transitions & +10.0 dB Headroom Preamp**:
+  - GPU pre-decoded (`Image.decode()`) optical blur-out / blur-in transitions (`fsArtBlurOut` / `fsArtBlurIn`) eliminate artwork flicker when skipping tracks in Fullscreen Now Playing.
+  - Expanded **Headroom Preamp** ceiling from `+6.0 dB` to **`+10.0 dB`** (`-12.0 dB` to `+10.0 dB`) for quiet high-DR classical and audiophile masters.
 
 ### Version 3.1.0 (Aura 3.1 — Living Mesh UI, Master Edition Alignment & Advanced Adaptive Connectivity)
 - **Apple Music-Style "Living Mesh" Backdrop & Master Edition Alignment**:

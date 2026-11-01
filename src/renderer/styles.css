@@ -67,6 +67,10 @@ body {
   padding: 0 16px;
   border-bottom: 1px solid var(--border-glass);
   z-index: 100;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  isolation: isolate;
 }
 
 .titlebar-brand {
@@ -150,6 +154,10 @@ body {
   z-index: 0;
   overflow: hidden;
   transition: opacity 0.8s ease;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  contain: strict;
 }
 
 .ambient-glow .living-mesh-canvas {
@@ -172,6 +180,8 @@ body {
   z-index: 10;
   overflow-y: auto;
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 
@@ -391,6 +401,8 @@ body {
   position: relative;
   overflow: hidden;
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 
@@ -470,6 +482,8 @@ body {
   overflow: hidden;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 
@@ -595,6 +609,12 @@ body {
   gap: 14px;
   height: 520px;
   overflow-y: auto;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  isolation: isolate;
 }
 
 .preset-category-title {
@@ -654,6 +674,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  isolation: isolate;
 }
 
 .eq-console-header {
@@ -746,6 +772,8 @@ body {
   padding: 0 24px;
   z-index: 50;
   transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   isolation: isolate;
 }
 
