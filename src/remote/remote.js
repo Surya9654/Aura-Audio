@@ -38,6 +38,9 @@
     isBitPerfect: false,
     subsonicFilterEnabled: true,
     noiseGateEnabled: true,
+    activeSinkDeviceId: 'default',
+    activeSinkDeviceLabel: 'System Default Audio',
+    availableOutputDevices: [],
     trackPath: ''
   };
 
@@ -99,6 +102,7 @@
   const remotePhaseInvert = document.getElementById('remote-phase-invert');
   const remotePureMode = document.getElementById('remote-pure-mode');
   const presetSelector = document.getElementById('preset-selector');
+  const remoteOutputSelector = document.getElementById('remote-output-selector');
 
   const remoteThemeDesc = document.getElementById('remote-theme-desc');
   const remoteActiveThemeChip = document.getElementById('remote-active-theme-chip');
@@ -951,6 +955,21 @@
       if (match) presetSelector.value = match.value;
     }
 
+    // Playback Output Device Selector
+    if (remoteOutputSelector && Array.isArray(state.availableOutputDevices) && state.availableOutputDevices.length > 0) {
+      const currentVal = state.activeSinkDeviceId || 'default';
+      remoteOutputSelector.innerHTML = '';
+      state.availableOutputDevices.forEach(dev => {
+        const opt = document.createElement('option');
+        opt.value = dev.deviceId;
+        opt.textContent = `${dev.name} (${dev.type})`;
+        if (dev.deviceId === currentVal) opt.selected = true;
+        remoteOutputSelector.appendChild(opt);
+      });
+    } else if (remoteOutputSelector && state.activeSinkDeviceId) {
+      remoteOutputSelector.value = state.activeSinkDeviceId;
+    }
+
     updateProgressUI();
 
     // Re-render library highlight for currently playing track
@@ -1560,6 +1579,18 @@
     state.activePresetId = e.target.value;
     sendCommand('set-preset', { preset: e.target.value });
   });
+
+  // 7. Playback Output Device Switching
+  if (remoteOutputSelector) {
+    remoteOutputSelector.addEventListener('change', (e) => {
+      haptic(14);
+      const selectedOpt = remoteOutputSelector.options[remoteOutputSelector.selectedIndex];
+      const name = selectedOpt ? selectedOpt.text.split(' (')[0] : '';
+      state.activeSinkDeviceId = e.target.value;
+      state.activeSinkDeviceLabel = name;
+      sendCommand('set-output-device', { deviceId: e.target.value, name });
+    });
+  }
 
   // Initialize
   applyRemoteTheme(state.activeThemeId, false);

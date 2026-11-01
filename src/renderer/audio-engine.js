@@ -160,6 +160,10 @@ export class HighResAudioEngine {
 
     this.rewire();
     this.sampleRate = this.audioContext.sampleRate;
+
+    if (this.outputDeviceId && this.outputDeviceId !== 'default') {
+      this.setOutputDevice(this.outputDeviceId).catch(() => {});
+    }
   }
 
   // Crossfeed (bs2b binaural speaker simulation):
@@ -508,17 +512,32 @@ export class HighResAudioEngine {
   }
 
   async setOutputDevice(deviceId) {
-    if (this.audioElement && typeof this.audioElement.setSinkId === 'function') {
+    this.outputDeviceId = deviceId || 'default';
+    let routed = false;
+
+    // 1. Route Web Audio context output (since stream connects to audioContext.destination)
+    if (this.audioContext && typeof this.audioContext.setSinkId === 'function') {
       try {
-        await this.audioElement.setSinkId(deviceId);
-        console.log(`[AudioEngine]: Output routed to device: ${deviceId}`);
-        return true;
+        await this.audioContext.setSinkId(this.outputDeviceId);
+        console.log(`[AudioEngine]: AudioContext output routed to device: ${this.outputDeviceId}`);
+        routed = true;
       } catch (err) {
-        console.warn('setSinkId failed:', err);
-        return false;
+        console.warn('AudioContext.setSinkId failed:', err);
       }
     }
-    return false;
+
+    // 2. Also route HTMLMediaElement
+    if (this.audioElement && typeof this.audioElement.setSinkId === 'function') {
+      try {
+        await this.audioElement.setSinkId(this.outputDeviceId);
+        console.log(`[AudioEngine]: AudioElement output routed to device: ${this.outputDeviceId}`);
+        routed = true;
+      } catch (err) {
+        console.warn('AudioElement.setSinkId failed:', err);
+      }
+    }
+
+    return routed;
   }
 
   setVolume(volume0to1) {

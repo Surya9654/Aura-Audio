@@ -2293,8 +2293,68 @@ function initLibrarySearch() {
 // 15. Aura 3.0 Connect: Wi-Fi Mobile Remote & Sound Output Routing Controller
 let activeSinkDeviceId = localStorage.getItem('aura.sinkDeviceId') || 'default';
 let activeSinkDeviceLabel = localStorage.getItem('aura.sinkDeviceLabel') || 'System Default Audio';
+let cachedPlaybackDevices = [];
 let lastRemoteBroadcastTimestamp = 0;
 let lastSentCoverTrackPath = null;
+
+async function selectPlaybackDevice(deviceId, name = '') {
+  activeSinkDeviceId = deviceId || 'default';
+  if (name) {
+    activeSinkDeviceLabel = name;
+  } else {
+    const match = cachedPlaybackDevices.find(d => d.deviceId === activeSinkDeviceId);
+    activeSinkDeviceLabel = match ? match.name : (activeSinkDeviceId === 'default' ? 'System Default Audio' : 'Audio Device');
+  }
+
+  localStorage.setItem('aura.sinkDeviceId', activeSinkDeviceId);
+  localStorage.setItem('aura.sinkDeviceLabel', activeSinkDeviceLabel);
+
+  if (audioEngine) {
+    await audioEngine.setOutputDevice(activeSinkDeviceId);
+  }
+
+  const quickOutputLabel = document.getElementById('quick-output-label');
+  if (quickOutputLabel) {
+    quickOutputLabel.textContent = activeSinkDeviceLabel;
+    quickOutputLabel.title = `Playback Output: ${activeSinkDeviceLabel}`;
+  }
+
+  const settingsOutputChip = document.getElementById('settings-output-chip');
+  if (settingsOutputChip) {
+    settingsOutputChip.textContent = activeSinkDeviceLabel;
+  }
+  const selectPlayback = document.getElementById('select-playback-device');
+  if (selectPlayback && selectPlayback.value !== activeSinkDeviceId) {
+    selectPlayback.value = activeSinkDeviceId;
+  }
+
+  const activeSinkTag = document.getElementById('active-sink-tag');
+  if (activeSinkTag) {
+    activeSinkTag.textContent = `CURRENT: ${activeSinkDeviceLabel.toUpperCase().slice(0, 26)}`;
+  }
+  const connectGrid = document.getElementById('connect-devices-grid');
+  if (connectGrid) {
+    connectGrid.querySelectorAll('.device-card').forEach(c => {
+      const match = c.dataset.deviceId === activeSinkDeviceId;
+      c.classList.toggle('active', match);
+      const b = c.querySelector('.device-action-btn');
+      if (b) b.textContent = match ? 'ACTIVE ROUTE' : 'ROUTE OUTPUT';
+    });
+  }
+
+  const quickList = document.getElementById('quick-output-list');
+  if (quickList) {
+    quickList.querySelectorAll('.quick-output-item').forEach(item => {
+      const isAct = item.dataset.deviceId === activeSinkDeviceId;
+      item.classList.toggle('active', isAct);
+      const chk = item.querySelector('.quick-output-check');
+      if (chk) chk.style.display = isAct ? 'inline-block' : 'none';
+    });
+  }
+
+  updateSignalPath();
+  broadcastRemoteState(true);
+}
 
 function broadcastRemoteState(force = false, isTick = false) {
   if (!window.electronAPI || !window.electronAPI.sendRemoteState) return;
@@ -2346,7 +2406,10 @@ function broadcastRemoteState(force = false, isTick = false) {
     trackPath: track ? track.path : '',
     isBitPerfect: !!state.isBitPerfect,
     subsonicFilterEnabled: !!audioEngine.subsonicFilterEnabled,
-    noiseGateEnabled: !!audioEngine.noiseGateEnabled
+    noiseGateEnabled: !!audioEngine.noiseGateEnabled,
+    activeSinkDeviceId,
+    activeSinkDeviceLabel,
+    availableOutputDevices: (cachedPlaybackDevices || []).map(d => ({ deviceId: d.deviceId, name: d.name, type: d.type }))
   };
 
   window.electronAPI.sendRemoteState(remotePayload);
@@ -2486,37 +2549,66 @@ async function loadConnectDevices() {
       <button class="device-action-btn">${isCurrent ? 'ACTIVE ROUTE' : 'ROUTE OUTPUT'}</button>
     `;
 
-    const selectDevice = async () => {
-      activeSinkDeviceId = dev.deviceId;
-      activeSinkDeviceLabel = dev.name;
-      localStorage.setItem('aura.sinkDeviceId', activeSinkDeviceId);
-      localStorage.setItem('aura.sinkDeviceLabel', activeSinkDeviceLabel);
-
-      if (activeSinkTag) {
-        activeSinkTag.textContent = `CURRENT: ${dev.name.toUpperCase().slice(0, 26)}`;
-      }
-
-      // Route through AudioEngine setSinkId
-      if (dev.deviceId && dev.deviceId !== '') {
-        await audioEngine.setOutputDevice(dev.deviceId);
-      }
-
-      // Update active UI cards
-      container.querySelectorAll('.device-card').forEach(c => {
-        c.classList.remove('active');
-        const b = c.querySelector('.device-action-btn');
-        if (b) b.textContent = 'ROUTE OUTPUT';
-      });
-      card.classList.add('active');
-      const actionBtn = card.querySelector('.device-action-btn');
-      if (actionBtn) actionBtn.textContent = 'ACTIVE ROUTE';
-
-      updateSignalPath();
-    };
-
-    card.addEventListener('click', selectDevice);
+    card.dataset.deviceId = dev.deviceId;
+    card.addEventListener('click', () => {
+      selectPlaybackDevice(dev.deviceId, dev.name);
+    });
     container.appendChild(card);
   });
+
+  cachedPlaybackDevices = renderedList;
+
+  // 1. Populate Master Settings dropdown (#select-playback-device)
+  const selectPlayback = document.getElementById('select-playback-device');
+  const settingsOutputChip = document.getElementById('settings-output-chip');
+  if (settingsOutputChip) {
+    settingsOutputChip.textContent = activeSinkDeviceLabel;
+  }
+  if (selectPlayback) {
+    selectPlayback.innerHTML = '';
+    renderedList.forEach(dev => {
+      const opt = document.createElement('option');
+      opt.value = dev.deviceId;
+      opt.textContent = `${dev.name} (${dev.type})`;
+      if (dev.deviceId === activeSinkDeviceId || (!activeSinkDeviceId && dev.isDefault)) {
+        opt.selected = true;
+      }
+      selectPlayback.appendChild(opt);
+    });
+    selectPlayback.onchange = (e) => {
+      const chosen = renderedList.find(d => d.deviceId === e.target.value);
+      selectPlaybackDevice(e.target.value, chosen ? chosen.name : '');
+    };
+  }
+
+  // 2. Populate Bottom Player Bar Quick Output Popup (#quick-output-list)
+  const quickOutputLabel = document.getElementById('quick-output-label');
+  if (quickOutputLabel) {
+    quickOutputLabel.textContent = activeSinkDeviceLabel;
+    quickOutputLabel.title = `Playback Output: ${activeSinkDeviceLabel}`;
+  }
+  const quickList = document.getElementById('quick-output-list');
+  if (quickList) {
+    quickList.innerHTML = '';
+    renderedList.forEach(dev => {
+      const isAct = dev.deviceId === activeSinkDeviceId || (!activeSinkDeviceId && dev.isDefault);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `quick-output-item ${isAct ? 'active' : ''}`;
+      item.dataset.deviceId = dev.deviceId;
+      item.innerHTML = `
+        <span class="quick-output-icon">${getDeviceIconSvg(dev.iconType)}</span>
+        <span class="quick-output-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span>
+        <span class="quick-output-check" style="${isAct ? 'display:inline-block;' : 'display:none;'}">✓</span>
+      `;
+      item.addEventListener('click', () => {
+        selectPlaybackDevice(dev.deviceId, dev.name);
+        const menu = document.getElementById('quick-output-menu');
+        if (menu) menu.style.display = 'none';
+      });
+      quickList.appendChild(item);
+    });
+  }
 }
 
 function initConnectUI() {
@@ -2549,6 +2641,22 @@ function initConnectUI() {
         if (connectView) connectView.classList.add('active');
       }
       refreshRemoteNetworkInfo();
+    });
+  }
+
+  // Quick Playback Output Device Picker toggle
+  const btnQuickOutput = document.getElementById('btn-quick-output');
+  const quickOutputMenu = document.getElementById('quick-output-menu');
+  if (btnQuickOutput && quickOutputMenu) {
+    btnQuickOutput.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = quickOutputMenu.style.display === 'block';
+      quickOutputMenu.style.display = isVisible ? 'none' : 'block';
+    });
+    document.addEventListener('click', (e) => {
+      if (quickOutputMenu.style.display === 'block' && !quickOutputMenu.contains(e.target) && !btnQuickOutput.contains(e.target)) {
+        quickOutputMenu.style.display = 'none';
+      }
     });
   }
 
@@ -2845,6 +2953,10 @@ function initConnectUI() {
         if (action.mode && typeof livingMesh.setBackdropMode === 'function') {
           livingMesh.setBackdropMode(action.mode);
           broadcastRemoteState(true);
+        }
+      } else if (cmd === 'set-output-device') {
+        if (action.deviceId !== undefined) {
+          selectPlaybackDevice(action.deviceId, action.name);
         }
       }
     });
